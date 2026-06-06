@@ -3,204 +3,987 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Astro Asso - Gestion des Soirées</title>
+    <title>2APS - Soirées Astro</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            padding: 20px; 
-            max-width: 800px; 
-            margin: auto; 
-            background-color: #f4f4f9;
-            color: #333;
-        }
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; background-color: #f4f4f9; color: #333; }
         h1 { text-align: center; color: #2c3e50; }
         
-        .add-member-section { 
-            background: #ffffff; 
-            padding: 20px; 
-            border-radius: 8px; 
-            margin-bottom: 25px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .add-member-section input, .add-member-section button {
-            padding: 10px;
-            margin-top: 5px;
-        }
-        .add-member-section button {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
+        /* --- Écran de connexion --- */
+        #login-screen { background: #fff; padding: 30px; border-radius: 8px; max-width: 400px; margin: 50px auto; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        #login-screen input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         
-        .soiree-card { 
-            background: #ffffff; 
-            border-left: 5px solid #2980b9; 
-            padding: 20px; 
-            margin-bottom: 20px; 
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+        #main-app { display: none; }
+        .user-header { display: flex; justify-content: space-between; align-items: center; background: #ecf0f1; padding: 10px 20px; border-radius: 8px; margin-bottom: 20px; }
+        .btn-logout { background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+
+        /* --- Boutons et Modales --- */
+        .admin-login-btn { background-color: #34495e; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 10px; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 1000; }
+        .modal-content { background-color: #fff; margin: 5% auto; padding: 20px; border-radius: 8px; width: 95%; max-width: 900px; max-height: 85vh; overflow-y: auto; position: relative; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .close-btn { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-btn:hover { color: #e74c3c; }
+
+        /* --- Onglets (Séparés pour Main et Admin) --- */
+        .tabs { display: flex; border-bottom: 2px solid #ccc; margin-bottom: 20px; margin-top: 10px; }
+        .tab-btn { background: none; border: none; padding: 10px 20px; cursor: pointer; font-size: 16px; color: #7f8c8d; border-bottom: 3px solid transparent; }
+        .tab-btn:hover { color: #34495e; }
+        .tab-btn.active { border-bottom: 3px solid #3498db; font-weight: bold; color: #2980b9; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* --- Formulaires & Tableaux --- */
+        .form-section { background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .form-grid input, .form-grid select, .form-section input.full-width, textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; width: 100%; }
+        .form-grid input.full-width { grid-column: span 2; }
+        textarea { resize: vertical; margin-bottom: 10px; }
         
-        .vote-section { 
-            margin-top: 15px; 
-            padding-top: 15px; 
-            border-top: 1px solid #eee; 
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
+        .btn-creer { background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; font-weight: bold; margin-top: 10px; width: 100%; }
+        .btn-creer:hover { background-color: #2980b9; }
+        .btn-annuler { background-color: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; font-weight: bold; margin-top: 10px; display: none; width: 100%; }
+
+        .search-bar { width: 100%; padding: 10px; margin-bottom: 15px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; cursor: pointer; }
+        
+        .btn-edit { background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;}
+        .btn-toggle { background-color: #7f8c8d; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;}
+        .btn-delete { background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;}
+
+        /* --- Cartes (Soirées & Questions) --- */
+        .soiree-card { background: #ffffff; border-left: 5px solid #2980b9; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .question-card { background: #ffffff; border-left: 5px solid #8e44ad; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        
+        .vote-section { margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; display: flex; gap: 10px; flex-wrap: wrap; }
+        .vote-section select, .vote-section button { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        .vote-section button { background-color: #2ecc71; color: white; cursor: pointer; border: none; font-weight: bold; }
+        
+        /* Statistiques */
+        .stats-bar { display: flex; gap: 15px; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 6px; cursor: pointer; border: 1px solid #e0e0e0; transition: background 0.2s; }
+        .stats-bar:hover { background: #e8eaed; }
+        .stat-badge { font-size: 14px; font-weight: bold; }
+        .stat-present { color: #27ae60; }
+        .stat-attente { color: #f39c12; }
+        .stat-absent { color: #e74c3c; }
+        
+        .details-list { margin-bottom: 15px; }
+        .details-list h4 { margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+        .details-list ul { margin-top: 0; padding-left: 20px; }
+    
+    /* --- Bandeau d'alerte Sondages --- */
+        #sondages-banner-container { margin-bottom: 20px; }
+        .sondage-banner {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+            color: white; padding: 12px 20px; border-radius: 8px;
+            cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-weight: bold; transition: transform 0.2s;
         }
-        .vote-section select, .vote-section button {
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-        }
+        .sondage-banner:hover { transform: scale(1.02); }
+
     </style>
 </head>
 <body>
 
-    <h1>Soirées Astronomie 🔭</h1>
+    <h1>2APS - Soirées Astro</h1>
 
-    <div class="add-member-section">
-        <h3>Ajouter un nouveau membre</h3>
-        <input type="text" id="new-member-name" placeholder="Ex: Jean Dupont">
-        <button onclick="ajouterMembre()">Créer le membre</button>
+    <div id="login-screen">
+        <h2>Connexion Membre</h2>
+        <input type="email" id="login-email" placeholder="Votre E-mail">
+        <input type="password" id="login-mdp" placeholder="Votre Mot de passe">
+        <button class="btn-creer" onclick="seConnecter()">Se connecter</button>
     </div>
 
-    <div id="soirees-container">
-        <p>Chargement des soirées...</p>
+    <div id="main-app">
+        <div class="user-header">
+            <div>
+                <span id="user-greeting">Connecté</span>
+                <button id="btn-admin-access" class="admin-login-btn" onclick="accederAdmin()" style="display:none;">⚙️ Admin</button>
+            </div>
+            <button class="btn-logout" onclick="seDeconnecter()">Déconnexion</button>
+        </div>
+
+                <!-- NOUVEAU : Le conteneur du bandeau qui s'affichera ici -->
+        <div id="sondages-banner-container"></div>
+
+        <!-- ONGLETS PRINCIPAUX -->
+        <div class="tabs">
+            <button class="tab-btn active tab-btn-main" onclick="changerOngletPrincipal('vue-soirees', this)">🔭 Soirées</button>
+            <button class="tab-btn tab-btn-main" onclick="changerOngletPrincipal('vue-questions', this)">❓ Sondages & Questions</button>
+        </div>
+
+        
+        <div id="onglet-vue-soirees" class="tab-content tab-content-main active">
+            <div id="soirees-container"><p>Chargement des soirées...</p></div>
+        </div>
+
+        <div id="onglet-vue-questions" class="tab-content tab-content-main">
+            <!-- Le bouton pour ouvrir la modale -->
+            <button class="btn-creer" style="background-color: #8e44ad; width: auto; margin-bottom: 20px; display: block;" onclick="ouvrirModalQuestion()">
+                ➕ Créer un nouveau sondage
+            </button>
+
+            <div id="questions-container"><p>Chargement des questions...</p></div>
+        </div>
+        </div>
+    </div>
+
+    <div id="admin-modal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="fermerAdmin()">&times;</span>
+            <h2>Administration du Bureau</h2>
+            
+            <div class="tabs">
+                <button class="tab-btn active tab-btn-admin" onclick="changerOngletAdmin('membres', this)">👥 Membres</button>
+                <button class="tab-btn tab-btn-admin" onclick="changerOngletAdmin('soirees', this)">🔭 Soirées</button>
+            </div>
+
+            <div id="onglet-admin-membres" class="tab-content tab-content-admin active">
+                <div class="form-section" id="form-membre-section">
+                    <h3 id="form-membre-titre">Ajouter un nouveau membre</h3>
+                    <div class="form-grid">
+                        <input type="text" id="new-prenom" placeholder="Prénom">
+                        <input type="text" id="new-nom" placeholder="Nom">
+                        <input type="text" id="new-tel" placeholder="Téléphone">
+                        <input type="text" id="new-region" placeholder="Région (Ex: Sud)">
+                        <input type="email" id="new-email" placeholder="E-mail">
+                        <input type="text" id="new-mdp" placeholder="Mot de passe">
+                        <select id="new-role" class="full-width">
+                            <option value="Membre">Rôle : Membre standard</option>
+                            <option value="Bureau">Rôle : Membre du Bureau (Admin)</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btn-save-member" class="btn-creer" onclick="sauvegarderMembre()">Créer le membre</button>
+                        <button id="btn-cancel-edit" class="btn-annuler" onclick="annulerEdition()">Annuler</button>
+                    </div>
+                </div>
+
+                <input type="text" id="search-input" class="search-bar" placeholder="Rechercher un membre..." onkeyup="afficherTableauMembres()">
+                <table>
+                    <thead>
+                        <tr>
+                            <th onclick="trierMembres('prenom')">Prénom ↕</th>
+                            <th onclick="trierMembres('nom')">Nom ↕</th>
+                            <th>Infos</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="members-tbody"></tbody>
+                </table>
+            </div>
+
+            <div id="onglet-admin-soirees" class="tab-content tab-content-admin">
+                <div class="form-section">
+                    <h3>Programmer une soirée d'observation</h3>
+                    <input type="text" id="new-soiree-titre" class="full-width" placeholder="Titre de la soirée" style="margin-bottom: 10px;">
+                    <div class="form-grid">
+                        <input type="datetime-local" id="new-soiree-date">
+                        <input type="text" id="new-soiree-lieu" placeholder="Lieu">
+                    </div>
+                    <textarea id="new-soiree-desc" rows="3" placeholder="Description courte, matériel..."></textarea>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btn-save-soiree" class="btn-creer" onclick="ajouterSoiree()">Programmer la soirée</button>
+                        <button id="btn-cancel-soiree-edit" class="btn-annuler" onclick="annulerEditionSoiree()">Annuler</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE CRÉATION DE SONDAGE -->
+    <div id="modal-create-question" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close-btn" onclick="fermerModalQuestion()">&times;</span>
+            <div class="form-section" style="margin-bottom: 0; background: transparent; padding: 0;">
+                <h3 style="color: #8e44ad;">💡 Soumettre une nouvelle idée / sondage</h3>
+                <input type="text" id="new-question-titre" class="full-width" placeholder="Votre question (ex: Achats de nouveaux oculaires ?)" style="margin-bottom: 10px;">
+                <select id="new-question-cible" class="full-width" style="margin-bottom: 10px;">
+                    <option value="Tous">Visible par : Tous les membres</option>
+                    <option value="Bureau" id="opt-cible-bureau">Visible par : Uniquement le Bureau</option>
+                </select>
+                <textarea id="new-question-desc" rows="3" placeholder="Détails supplémentaires..."></textarea>
+                <button class="btn-creer" style="background-color: #8e44ad;" onclick="ajouterQuestion()">Publier le sondage</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="details-votes-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close-btn" onclick="fermerDetailsVotes()">&times;</span>
+            <h2 id="titre-details-modal">Récapitulatif des votes</h2>
+            <div id="details-votes-container"><p>Chargement...</p></div>
+        </div>
+    </div>
+
+    <!-- MODALE JUSTIFICATION DE SUPPRESSION -->
+    <div id="modal-delete-reason" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close-btn" onclick="fermerModalSuppression()">&times;</span>
+            <div class="form-section" style="margin-bottom: 0; background: transparent; padding: 0;">
+                <h3 style="color: #e74c3c;">⚠️ Demande de retrait</h3>
+                <p>En tant que membre du Bureau, vous devez justifier le retrait de ce sondage auprès de son auteur.</p>
+                <textarea id="delete-reason-text" rows="4" placeholder="Veuillez expliquer pourquoi ce sondage doit être retiré..."></textarea>
+                <button class="btn-delete" style="width: 100%; padding: 10px; font-size: 14px; margin-top: 10px;" onclick="soumettreDemandeSuppression()">Envoyer la demande à l'auteur</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-delete-author-reason" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close-btn" onclick="fermerModalSuppressionAuteur()">&times;</span>
+            <div class="form-section" style="margin-bottom: 0; background: transparent; padding: 0;">
+                <h3 style="color: #e67e22;">🗑️ Retirer mon sondage</h3>
+                <p>Votre sondage ne sera plus soumis au vote, mais restera visible dans l'historique par souci de transparence.</p>
+                <textarea id="delete-author-reason-text" rows="3" placeholder="Expliquez brièvement pourquoi vous retirez ce sondage (Optionnel)..."></textarea>
+                <button class="btn-delete" style="width: 100%; padding: 10px; font-size: 14px; margin-top: 10px;" onclick="soumettreSuppressionAuteur()">Confirmer le retrait</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-cancel-soiree" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close-btn" onclick="fermerModalAnnulationSoiree()">&times;</span>
+            <div class="form-section" style="margin-bottom: 0; background: transparent; padding: 0;">
+                <h3 style="color: #e67e22;">🛑 Annuler la soirée</h3>
+                <p>La soirée restera visible dans l'historique pour informer les membres de son annulation.</p>
+                <textarea id="cancel-soiree-reason" rows="3" placeholder="Motif de l'annulation (ex: Météo défavorable, nuages...)..."></textarea>
+                <button class="btn-delete" style="width: 100%; padding: 10px; font-size: 14px; margin-top: 10px;" onclick="soumettreAnnulationSoiree()">Confirmer l'annulation</button>
+            </div>
+        </div>
     </div>
 
     <script>
-        // ----------------------------------------------------
-        // INITIALISATION DE SUPABASE
-        // ----------------------------------------------------
         const SUPABASE_URL = 'https://zwbwkhqyjeeykixtpldi.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_RdxzQzvTpjj8nS1B2hDpmw_w4GH_9UC';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let membresList = [];
+        let triColonne = 'prenom'; 
+        let triAscendant = true;
+        let membreConnecte = null; 
+        
+        let membreEditionId = null; 
+        let soireeEditionId = null; 
+        let modaleDetailsOuverteId = null; // Mémorise l'ID de la soirée ou question affichée en détail
+        let modaleDetailsType = null; // 'soiree' ou 'question'
 
-        // Fonction exécutée au lancement de la page
         async function init() {
+            const savedUser = localStorage.getItem('astroUser');
+            if (savedUser) {
+                membreConnecte = JSON.parse(savedUser);
+                afficherApp();
+            }
+        }
+
+        // --- GESTION DES ONGLETS (Séparée pour éviter les conflits) ---
+        function changerOngletPrincipal(ongletId, btnElement) {
+            const contents = document.getElementsByClassName('tab-content-main');
+            for (let i = 0; i < contents.length; i++) contents[i].classList.remove('active');
+            const btns = document.getElementsByClassName('tab-btn-main');
+            for (let i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+            
+            document.getElementById('onglet-' + ongletId).classList.add('active');
+            btnElement.classList.add('active');
+        }
+
+        function changerOngletAdmin(ongletId, btnElement) {
+            const contents = document.getElementsByClassName('tab-content-admin');
+            for (let i = 0; i < contents.length; i++) contents[i].classList.remove('active');
+            const btns = document.getElementsByClassName('tab-btn-admin');
+            for (let i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+            
+            document.getElementById('onglet-admin-' + ongletId).classList.add('active');
+            btnElement.classList.add('active');
+        }
+
+        // --- CONNEXION ---
+        async function seConnecter() {
+            const email = document.getElementById('login-email').value.trim();
+            const mdp = document.getElementById('login-mdp').value.trim();
+            if (!email || !mdp) return alert("Veuillez remplir tous les champs.");
+
+            const { data, error } = await supabaseClient.from('membres').select('*').eq('email', email).eq('mot_de_passe', mdp).single();
+
+            if (error || !data) {
+                alert("E-mail ou mot de passe incorrect.");
+            } else if (data.actif === false) {
+                alert("Votre compte a été désactivé. Veuillez contacter un membre du bureau.");
+            } else {
+                membreConnecte = data;
+                localStorage.setItem('astroUser', JSON.stringify(data)); 
+                afficherApp();
+            }
+        }
+
+        async function seDeconnecter() {
+            membreConnecte = null;
+            localStorage.removeItem('astroUser');
+            document.getElementById('login-screen').style.display = 'block';
+            document.getElementById('main-app').style.display = 'none';
+        }
+
+        async function afficherApp() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            document.getElementById('user-greeting').innerHTML = `👨‍🚀 Connecté : <strong>${membreConnecte.prenom} ${membreConnecte.nom}</strong>`;
+            
+            if (membreConnecte.role === 'Bureau') {
+                document.getElementById('btn-admin-access').style.display = 'inline-block';
+                // Affiche l'option pour cibler uniquement le bureau
+                document.getElementById('opt-cible-bureau').style.display = 'block'; 
+            } else {
+                document.getElementById('btn-admin-access').style.display = 'none';
+                // Cache l'option et force la cible sur "Tous"
+                document.getElementById('opt-cible-bureau').style.display = 'none'; 
+                document.getElementById('new-question-cible').value = 'Tous';
+            }
+
             await chargerMembres();
             await chargerSoirees();
+            await chargerQuestions();
+            ecouterRealtime();
         }
 
-        // ----------------------------------------------------
-        // GESTION DES MEMBRES
-        // ----------------------------------------------------
+        function accederAdmin() { document.getElementById('admin-modal').style.display = 'block'; afficherTableauMembres(); }
+        function fermerAdmin() { document.getElementById('admin-modal').style.display = 'none'; annulerEdition(); annulerEditionSoiree(); }
+
+        // --- GESTION DES MEMBRES ---
         async function chargerMembres() {
-            const { data, error } = await supabase.from('membres').select('*').order('nom', { ascending: true });
-            if (error) console.error("Erreur membres:", error);
-            else membresList = data;
+            const { data } = await supabaseClient.from('membres').select('*');
+            membresList = data || [];
         }
 
-        async function ajouterMembre() {
-            const nomInput = document.getElementById('new-member-name');
-            const nom = nomInput.value.trim();
-            if (!nom) return alert("Veuillez entrer un nom.");
-
-            const { error } = await supabase.from('membres').insert([{ nom: nom }]);
-            
-            if (error) {
-                console.error("Erreur création membre:", error);
-                alert("Erreur lors de la création.");
-            } else {
-                nomInput.value = ''; // On vide la case
-                await chargerMembres(); // On met à jour la liste en mémoire
-                await chargerSoirees(); // On rafraîchit l'affichage pour mettre à jour les menus déroulants
-            }
+        function trierMembres(colonne) {
+            if (triColonne === colonne) triAscendant = !triAscendant; else { triColonne = colonne; triAscendant = true; }
+            afficherTableauMembres();
         }
 
-        // ----------------------------------------------------
-        // GESTION DES SOIRÉES ET AFFICHAGE
-        // ----------------------------------------------------
-        async function chargerSoirees() {
-            const container = document.getElementById('soirees-container');
-            
-            // Récupération des soirées depuis Supabase
-            const { data: soirees, error } = await supabase.from('soirees').select('*').order('date', { ascending: true });
-            
-            if (error) {
-                container.innerHTML = '<p>Erreur de connexion à la base de données.</p>';
-                return;
-            }
+        function afficherTableauMembres() {
+            const tbody = document.getElementById('members-tbody');
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
 
-            if (soirees.length === 0) {
-                container.innerHTML = '<p>Aucune soirée n\'est programmée pour le moment. Ajoutez-en une dans Supabase !</p>';
-                return;
-            }
+            let membresFiltres = membresList.filter(m => (m.prenom && m.prenom.toLowerCase().includes(searchTerm)) || (m.nom && m.nom.toLowerCase().includes(searchTerm)) || (m.email && m.email.toLowerCase().includes(searchTerm)));
+            membresFiltres.sort((a, b) => {
+                let valA = (a[triColonne] || '').toLowerCase(); let valB = (b[triColonne] || '').toLowerCase();
+                if (valA < valB) return triAscendant ? -1 : 1; if (valA > valB) return triAscendant ? 1 : -1; return 0;
+            });
 
-            container.innerHTML = ''; // On vide le conteneur avant de le remplir
-
-            // On boucle sur chaque soirée pour créer son affichage
-            soirees.forEach(soiree => {
-                // Formatage de la date en français
-                const dateFormattee = new Date(soiree.date).toLocaleDateString('fr-FR', { 
-                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
-                });
-                
-                // Préparation du menu déroulant avec les membres actuels
-                let membresOptions = membresList.map(m => `<option value="${m.id}">${m.nom}</option>`).join('');
-
-                const cardHtml = `
-                    <div class="soiree-card">
-                        <h2>${soiree.titre}</h2>
-                        <p><strong>📅 Date :</strong> ${dateFormattee}</p>
-                        <p><strong>📍 Lieu :</strong> ${soiree.lieu || 'Non précisé'}</p>
-                        <p>${soiree.description || ''}</p>
-                        
-                        <div class="vote-section">
-                            <select id="membre-select-${soiree.id}">
-                                <option value="">-- Qui êtes-vous ? --</option>
-                                ${membresOptions}
-                            </select>
-                            
-                            <select id="statut-select-${soiree.id}">
-                                <option value="Present">✅ Présent</option>
-                                <option value="A confirmer">⏳ À confirmer</option>
-                                <option value="Absent">❌ Absent</option>
-                            </select>
-                            
-                            <button onclick="soumettreVote('${soiree.id}')">Enregistrer mon vote</button>
-                        </div>
-                    </div>
+            tbody.innerHTML = '';
+            membresFiltres.forEach(m => {
+                const estActif = m.actif !== false; 
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${m.prenom || ''}</td>
+                        <td>${m.nom || ''}</td>
+                        <td><strong>${m.role || 'Membre'}</strong><br><span style="font-size:11px;">${estActif ? '🟢 Actif' : '🔴 Inactif'}</span></td>
+                        <td style="display:flex; gap:5px; flex-wrap:wrap;">
+                            <button class="btn-edit" title="Modifier" onclick="preparerEdition('${m.id}')">✏️</button>
+                            <button class="btn-toggle" title="Changer le statut" onclick="basculerStatutMembre('${m.id}', ${estActif})">${estActif ? 'Désactiver' : 'Réactiver'}</button>
+                            <button class="btn-delete" title="Supprimer" onclick="supprimerMembre('${m.id}', '${m.prenom} ${m.nom}')">🗑️</button>
+                        </td>
+                    </tr>
                 `;
-                container.innerHTML += cardHtml;
             });
         }
 
-        // ----------------------------------------------------
-        // GESTION DES VOTES
-        // ----------------------------------------------------
-        async function soumettreVote(soireeId) {
-            const membreId = document.getElementById(`membre-select-${soireeId}`).value;
-            const statut = document.getElementById(`statut-select-${soireeId}`).value;
+        function preparerEdition(id) {
+            const membre = membresList.find(m => m.id === id);
+            if(!membre) return;
+            membreEditionId = id;
+            document.getElementById('form-membre-titre').innerText = `Modifier le membre : ${membre.prenom} ${membre.nom}`;
+            document.getElementById('new-prenom').value = membre.prenom || '';
+            document.getElementById('new-nom').value = membre.nom || '';
+            document.getElementById('new-tel').value = membre.telephone || '';
+            document.getElementById('new-region').value = membre.region || '';
+            document.getElementById('new-email').value = membre.email || '';
+            document.getElementById('new-mdp').value = membre.mot_de_passe || '';
+            document.getElementById('new-role').value = membre.role || 'Membre';
+            document.getElementById('btn-save-member').innerText = "Mettre à jour";
+            document.getElementById('btn-save-member').style.backgroundColor = "#f39c12"; 
+            document.getElementById('btn-cancel-edit').style.display = "block";
+            document.querySelector('.modal-content').scrollTop = 0;
+        }
 
-            if (!membreId) return alert("Veuillez sélectionner votre nom dans la liste.");
+        function annulerEdition() {
+            membreEditionId = null;
+            document.getElementById('form-membre-titre').innerText = "Ajouter un nouveau membre";
+            document.getElementById('new-prenom').value = ''; document.getElementById('new-nom').value = '';
+            document.getElementById('new-tel').value = ''; document.getElementById('new-region').value = '';
+            document.getElementById('new-email').value = ''; document.getElementById('new-mdp').value = '';
+            document.getElementById('new-role').value = 'Membre';
+            document.getElementById('btn-save-member').innerText = "Créer le membre";
+            document.getElementById('btn-save-member').style.backgroundColor = "#3498db";
+            document.getElementById('btn-cancel-edit').style.display = "none";
+        }
 
-            // Upsert: Si une ligne existe déjà avec ce soiree_id et membre_id, on la met à jour. Sinon on la crée.
-            const { error } = await supabase
-                .from('votes')
-                .upsert(
-                    [{ soiree_id: soireeId, membre_id: membreId, statut: statut }], 
-                    { onConflict: 'soiree_id, membre_id' }
-                );
+        async function sauvegarderMembre() {
+            const prenom = document.getElementById('new-prenom').value.trim(); const nom = document.getElementById('new-nom').value.trim();
+            const email = document.getElementById('new-email').value.trim(); const mdp = document.getElementById('new-mdp').value.trim();
+            if (!prenom || !nom || !email || !mdp) return alert("Prénom, nom, e-mail et mot de passe obligatoires.");
+            const dataObj = { prenom: prenom, nom: nom, telephone: document.getElementById('new-tel').value.trim(), region: document.getElementById('new-region').value.trim(), email: email, mot_de_passe: mdp, role: document.getElementById('new-role').value };
 
-            if (error) {
-                console.error("Erreur de vote:", error);
-                alert("Erreur lors de l'enregistrement du vote.");
+            if (membreEditionId) {
+                const { error } = await supabaseClient.from('membres').update(dataObj).eq('id', membreEditionId);
+                if (!error) { alert("Membre mis à jour !"); annulerEdition(); }
             } else {
-                alert("Vote enregistré avec succès !");
+                const { error } = await supabaseClient.from('membres').insert([dataObj]);
+                if (!error) { alert("Membre ajouté !"); annulerEdition(); }
+            }
+            await chargerMembres(); afficherTableauMembres();  
+        }
+
+        async function basculerStatutMembre(id, estActif) {
+            const { error } = await supabaseClient.from('membres').update({ actif: !estActif }).eq('id', id);
+            if (!error) { await chargerMembres(); afficherTableauMembres(); }
+        }
+
+        async function supprimerMembre(id, nomComplet) {
+            if (!confirm(`⚠️ Voulez-vous vraiment supprimer DÉFINITIVEMENT le membre "${nomComplet}" ?`)) return;
+            const { error } = await supabaseClient.from('membres').delete().eq('id', id);
+            if (!error) {
+                await chargerMembres(); afficherTableauMembres();
+                if (membreConnecte && membreConnecte.id === id) seDeconnecter();
             }
         }
 
-        // Démarrage
+        // --- GESTION DES SOIRÉES ---
+        function preparerEditionSoiree(id, titre, date, lieu, description) {
+            soireeEditionId = id;
+            document.getElementById('new-soiree-titre').value = titre || '';
+            if (date) { const d = new Date(date); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); document.getElementById('new-soiree-date').value = d.toISOString().slice(0,16); }
+            document.getElementById('new-soiree-lieu').value = lieu || '';
+            document.getElementById('new-soiree-desc').value = description || '';
+            document.getElementById('btn-save-soiree').innerText = "Mettre à jour la soirée";
+            document.getElementById('btn-save-soiree').style.backgroundColor = "#f39c12";
+            document.getElementById('btn-cancel-soiree-edit').style.display = "block";
+            accederAdmin(); changerOngletAdmin('soirees', document.querySelectorAll('.tab-btn-admin')[1]);
+        }
+
+        function annulerEditionSoiree() {
+            soireeEditionId = null;
+            document.getElementById('new-soiree-titre').value = ''; document.getElementById('new-soiree-date').value = '';
+            document.getElementById('new-soiree-lieu').value = ''; document.getElementById('new-soiree-desc').value = '';
+            document.getElementById('btn-save-soiree').innerText = "Programmer la soirée";
+            document.getElementById('btn-save-soiree').style.backgroundColor = "#3498db";
+            document.getElementById('btn-cancel-soiree-edit').style.display = "none";
+        }
+
+        async function ajouterSoiree() {
+            const titre = document.getElementById('new-soiree-titre').value.trim(); const date = document.getElementById('new-soiree-date').value;
+            if (!titre || !date) return alert("Le titre et la date sont obligatoires.");
+            const dataObj = { titre: titre, date: date, lieu: document.getElementById('new-soiree-lieu').value.trim(), description: document.getElementById('new-soiree-desc').value.trim() };
+
+            if (soireeEditionId) {
+                const { error } = await supabaseClient.from('soirees').update(dataObj).eq('id', soireeEditionId);
+                if (!error) { alert("Mise à jour réussie !"); annulerEditionSoiree(); fermerAdmin(); }
+            } else {
+                const { error } = await supabaseClient.from('soirees').insert([dataObj]);
+                if (!error) { alert("Soirée programmée !"); annulerEditionSoiree(); }
+            }
+            if (membreConnecte) await chargerSoirees();
+        }
+
+        async function chargerSoirees() {
+            const container = document.getElementById('soirees-container');
+            const { data: soirees } = await supabaseClient.from('soirees').select('*').order('date', { ascending: true });
+            const { data: votes } = await supabaseClient.from('votes').select('*');
+            
+            if (!soirees) return;
+            if (soirees.length === 0) { container.innerHTML = '<p style="text-align:center; color:#7f8c8d;">Aucune soirée prévue.</p>'; return; }
+
+            container.innerHTML = ''; 
+            soirees.forEach(soiree => {
+                const objDate = new Date(soiree.date);
+                const affichageDate = objDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' à ' + objDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+                const votesSoiree = votes.filter(v => v.soiree_id === soiree.id);
+                const nbPresents = votesSoiree.filter(v => v.statut === 'Present').length;
+                const nbAttente = votesSoiree.filter(v => v.statut === 'A confirmer').length;
+                const nbAbsents = votesSoiree.filter(v => v.statut === 'Absent').length;
+
+                let monStatut = '';
+                if (membreConnecte) { const monVote = votesSoiree.find(v => v.membre_id === membreConnecte.id); if (monVote) monStatut = monVote.statut; }
+
+                if (soiree.annulee) {
+                    // MODE HISTORIQUE (Soirée annulée)
+                    const motifTexte = soiree.motif_annulation ? `"${soiree.motif_annulation}"` : "Aucun motif précisé.";
+                    
+                    container.innerHTML += `
+                        <div class="soiree-card" style="opacity: 0.7; border-left-color: #95a5a6;">
+                            <h2>${soiree.titre}</h2>
+                            <div style="background-color: #f2f4f4; border-left: 4px solid #7f8c8d; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
+                                <strong style="color: #34495e;">🛑 Soirée annulée</strong>
+                                <p style="margin: 5px 0 0 0; font-size: 14px;">${motifTexte}</p>
+                            </div>
+                            <p style="text-decoration: line-through; color:#95a5a6;"><strong>📅 Date et Heure :</strong> ${affichageDate}</p>
+                            <p style="text-decoration: line-through; color:#95a5a6;"><strong>📍 Lieu :</strong> ${soiree.lieu || 'Non précisé'}</p>
+                            
+                            <div class="stats-bar" onclick="afficherDetailsVotes('${soiree.id}', 'soiree')" style="opacity: 0.8;">
+                                <span class="stat-badge stat-present" id="stat-present-${soiree.id}">✅ Présents: ${nbPresents}</span>
+                                <span class="stat-badge stat-attente" id="stat-attente-${soiree.id}">⏳ À confirmer: ${nbAttente}</span>
+                                <span class="stat-badge stat-absent" id="stat-absent-${soiree.id}">❌ Absents: ${nbAbsents}</span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // MODE NORMAL
+                    let btnEditHtml = '';
+                    let btnCancelHtml = '';
+                    
+                    if (membreConnecte && membreConnecte.role === 'Bureau') {
+                        const descSafe = soiree.description ? soiree.description.replace(/'/g, "\\'") : '';
+                        const titreSafe = soiree.titre ? soiree.titre.replace(/'/g, "\\'") : '';
+                        const lieuSafe = soiree.lieu ? soiree.lieu.replace(/'/g, "\\'") : '';
+                        
+                        btnEditHtml = `<button class="btn-edit" style="float: right; margin-left: 5px;" onclick="preparerEditionSoiree('${soiree.id}', '${titreSafe}', '${soiree.date}', '${lieuSafe}', '${descSafe}')">⚙️ Modifier</button>`;
+                        btnCancelHtml = `<button class="btn-delete" style="float: right;" onclick="ouvrirModalAnnulationSoiree('${soiree.id}')">🛑 Annuler</button>`;
+                    }
+
+                    const maintenant = new Date();
+                    maintenant.setHours(0,0,0,0);
+                    const dateSoireePure = new Date(soiree.date);
+                    dateSoireePure.setHours(0,0,0,0);
+                    
+                    const diffTemps = dateSoireePure.getTime() - maintenant.getTime();
+                    const diffJours = Math.ceil(diffTemps / (1000 * 3600 * 24));
+
+                    let alerteHtml = '';
+                    if (diffJours >= 0 && diffJours <= 15) {
+                        let texteJour = diffJours === 0 ? "Aujourd'hui !" : (diffJours === 1 ? "Demain !" : `Dans ${diffJours} jours`);
+                        alerteHtml = `<div style="background-color: #f39c12; color: white; padding: 8px; border-radius: 4px; margin-bottom: 15px; text-align: center; font-weight: bold;">⚠️ Rappel : Cette soirée a lieu ${texteJour}</div>`;
+                    }
+
+                    container.innerHTML += `
+                        <div class="soiree-card">
+                            ${btnEditHtml}
+                            ${btnCancelHtml}
+                            <h2 style="margin-bottom: 10px;">${soiree.titre}</h2>
+                            ${alerteHtml}
+                            <p><strong>📅 Date et Heure :</strong> ${affichageDate}</p>
+                            <p><strong>📍 Lieu :</strong> ${soiree.lieu || 'Non précisé'}</p>
+                            <p>${soiree.description ? soiree.description.replace(/\n/g, '<br>') : ''}</p>
+                            
+                            <div class="stats-bar" onclick="afficherDetailsVotes('${soiree.id}', 'soiree')">
+                                <span class="stat-badge stat-present" id="stat-present-${soiree.id}">✅ Présents: ${nbPresents}</span>
+                                <span class="stat-badge stat-attente" id="stat-attente-${soiree.id}">⏳ À confirmer: ${nbAttente}</span>
+                                <span class="stat-badge stat-absent" id="stat-absent-${soiree.id}">❌ Absents: ${nbAbsents}</span>
+                            </div>
+                            
+                            <div class="vote-section">
+                                <select id="statut-select-${soiree.id}">
+                                    <option value="" ${monStatut === '' ? 'selected' : ''} disabled>-- Votre présence --</option>
+                                    <option value="Present" ${monStatut === 'Present' ? 'selected' : ''}>✅ Présent(e)</option>
+                                    <option value="A confirmer" ${monStatut === 'A confirmer' ? 'selected' : ''}>⏳ À confirmer</option>
+                                    <option value="Absent" ${monStatut === 'Absent' ? 'selected' : ''}>❌ Absent(e)</option>
+                                </select>
+                                <button onclick="soumettreVote('${soiree.id}', 'soiree')" style="background-color: #3498db;">${monStatut === '' ? 'Enregistrer' : 'Modifier'} mon vote</button>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        // --- NOUVEAU : Ouverture / Fermeture de la modale sondage ---
+        function ouvrirModalQuestion() {
+            document.getElementById('modal-create-question').style.display = 'block';
+        }
+
+        function fermerModalQuestion() {
+            document.getElementById('modal-create-question').style.display = 'none';
+        }
+
+        async function ajouterQuestion() {
+            const titre = document.getElementById('new-question-titre').value.trim();
+            const cible = document.getElementById('new-question-cible').value;
+            const desc = document.getElementById('new-question-desc').value.trim();
+
+            if (!titre) return alert("Le titre de la question est obligatoire.");
+
+            // NOUVEAU : On enregistre l'ID du créateur (auteur_id)
+            const { error } = await supabaseClient.from('questions').insert([{ 
+                titre: titre, 
+                cible: cible, 
+                description: desc,
+                auteur_id: membreConnecte.id 
+            }]);
+            if (error) alert("Erreur lors de la création du sondage.");
+            else {
+                document.getElementById('new-question-titre').value = ''; 
+                document.getElementById('new-question-desc').value = '';
+                
+                fermerModalQuestion(); // On referme la modale automatiquement
+                alert("Sondage publié avec succès !");
+                await chargerQuestions();
+            }
+        }
+
+        async function chargerQuestions() {
+            const container = document.getElementById('questions-container');
+            const bannerContainer = document.getElementById('sondages-banner-container');
+            
+            const { data: questions, error: errQ } = await supabaseClient.from('questions').select('*').order('created_at', { ascending: false });
+            const { data: reponses, error: errR } = await supabaseClient.from('reponses').select('*');
+            
+            if (errQ || errR || !questions) return;
+            
+            const membresActifs = membresList.filter(m => m.actif !== false);
+            const nbTotalActifs = membresActifs.length;
+            const nbBureauActifs = membresActifs.filter(m => m.role === 'Bureau').length;
+
+            const questionsVisibles = questions.filter(q => {
+                if (membreConnecte.role !== 'Bureau' && q.cible !== 'Tous') return false;
+                if (q.actif === false && !q.supprime) return false;
+
+                const reponsesQuestion = reponses.filter(r => r.question_id === q.id);
+                const nbCible = q.cible === 'Tous' ? nbTotalActifs : nbBureauActifs;
+                if (!q.supprime && reponsesQuestion.length >= nbCible && nbCible > 0) return false;
+
+                return true; 
+            });
+
+            if (bannerContainer) {
+                const sondagesEnCours = questionsVisibles.filter(q => !q.supprime);
+                if (sondagesEnCours.length > 0) {
+                    const texteSondage = sondagesEnCours.length === 1 ? "1 sondage est en cours" : `${sondagesEnCours.length} sondages sont en cours`;
+                    bannerContainer.innerHTML = `
+                        <div class="sondage-banner" onclick="allerAuxSondages()">
+                            <span>💡 ${texteSondage}. Cliquez ici pour donner votre avis !</span>
+                            <span>➡️</span>
+                        </div>
+                    `;
+                } else {
+                    bannerContainer.innerHTML = ''; 
+                }
+            }
+
+            if (questionsVisibles.length === 0) { 
+                container.innerHTML = '<p style="text-align:center; color:#7f8c8d;">Aucun sondage en cours ou tout le monde a déjà voté !</p>'; 
+                return; 
+            }
+
+            container.innerHTML = ''; 
+            
+            questionsVisibles.forEach(question => {
+                const reponsesQuestion = reponses.filter(r => r.question_id === question.id);
+                const nbPour = reponsesQuestion.filter(r => r.choix === 'Pour').length;
+                const nbContre = reponsesQuestion.filter(r => r.choix === 'Contre').length;
+                const nbAbstention = reponsesQuestion.filter(r => r.choix === 'Abstention').length;
+
+                let monChoix = '';
+                if (membreConnecte) { 
+                    const maReponse = reponsesQuestion.find(r => r.membre_id === membreConnecte.id); 
+                    if (maReponse) monChoix = maReponse.choix; 
+                }
+
+                const auteurInfo = membresList.find(m => m.id === question.auteur_id);
+                const auteurNom = auteurInfo ? `${auteurInfo.prenom} ${auteurInfo.nom}` : 'Ancien membre';
+                
+                const cibleBadge = question.cible === 'Bureau' ? `<span style="background:#e74c3c; color:white; padding:3px 8px; border-radius:12px; font-size:12px; margin-left:10px;">Privé (Bureau)</span>` : `<span style="background:#3498db; color:white; padding:3px 8px; border-radius:12px; font-size:12px; margin-left:10px;">Public (Tous)</span>`;
+                const auteurSpan = `<span style="font-size: 14px; font-weight: normal; color: #7f8c8d; display:block; margin-top:5px;">Par ${auteurNom}</span>`;
+
+                if (question.supprime) {
+                    const motifTexte = question.motif_suppression ? `"${question.motif_suppression}"` : "Aucune explication fournie.";
+                    
+                    container.innerHTML += `
+                        <div class="question-card" style="opacity: 0.7; border-left-color: #95a5a6;">
+                            <h2>${question.titre}</h2>
+                            <div style="background-color: #f2f4f4; border-left: 4px solid #7f8c8d; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
+                                <strong style="color: #34495e;">🛑 Retiré par son auteur (${auteurNom})</strong>
+                                <p style="margin: 5px 0 0 0; font-size: 14px;">${motifTexte}</p>
+                            </div>
+                            <p style="text-decoration: line-through; color:#95a5a6;">${question.description ? question.description.replace(/\n/g, '<br>') : ''}</p>
+                        </div>
+                    `;
+                } else {
+                    let actionsHtml = '';
+                    let alerteSuppressionHtml = '';
+                    let voteSectionHtml = ''; 
+                    let btnCloreHtml = ''; // CORRECTION : La variable est maintenant déclarée au bon endroit !
+
+                    if (question.en_demande_suppression) {
+                        alerteSuppressionHtml = `
+                            <div style="background-color: #fce4e4; border-left: 4px solid #e74c3c; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
+                                <strong style="color: #c0392b;">⚠️ Retrait demandé par le Bureau :</strong>
+                                <p style="margin: 5px 0 0 0; font-size: 14px;">"${question.motif_suppression}"</p>
+                            </div>
+                        `;
+                        if (membreConnecte && (membreConnecte.id === question.auteur_id || membreConnecte.role === 'Bureau')) {
+                            actionsHtml = `<button class="btn-delete" style="float: right;" onclick="confirmerSuppressionDefinitive('${question.id}')">🗑️ Confirmer la suppression</button>`;
+                        }
+                        voteSectionHtml = `<p style="color: #7f8c8d; font-style: italic; font-size: 14px;">Les votes sont suspendus suite à une demande de retrait.</p>`;
+                    } else {
+                        if (membreConnecte) {
+                            if (question.auteur_id && membreConnecte.id === question.auteur_id) {
+                                actionsHtml = `<button class="btn-delete" style="float: right;" onclick="ouvrirModalSuppressionAuteur('${question.id}')">🗑️ Retirer mon sondage</button>`;
+                            } else if (membreConnecte.role === 'Bureau') {
+                                actionsHtml = `<button class="btn-edit" style="float: right; background-color:#e67e22;" onclick="ouvrirModalSuppression('${question.id}')">🛑 Demander le retrait</button>`;
+                            }
+                        }
+
+                        if (membreConnecte && membreConnecte.role === 'Bureau') {
+                            btnCloreHtml = `<button class="btn-delete" style="float: right; margin-right: 5px;" onclick="cloreQuestion('${question.id}')">🔒 Clore</button>`;
+                        }
+
+                        voteSectionHtml = `
+                            <div class="vote-section">
+                                <select id="reponse-select-${question.id}">
+                                    <option value="" ${monChoix === '' ? 'selected' : ''} disabled>-- Votre réponse --</option>
+                                    <option value="Pour" ${monChoix === 'Pour' ? 'selected' : ''}>👍 Pour</option>
+                                    <option value="Contre" ${monChoix === 'Contre' ? 'selected' : ''}>👎 Contre</option>
+                                    <option value="Abstention" ${monChoix === 'Abstention' ? 'selected' : ''}>🤷 Abstention</option>
+                                </select>
+                                <button onclick="soumettreVote('${question.id}', 'question')" style="background-color: #8e44ad;">${monChoix === '' ? 'Voter' : 'Modifier mon vote'}</button>
+                            </div>
+                        `;
+                    }
+
+                    container.innerHTML += `
+                        <div class="question-card">
+                            ${actionsHtml}
+                            ${btnCloreHtml}
+                            <h2 style="margin-bottom: 5px;">${question.titre} ${cibleBadge}</h2>
+                            ${auteurSpan}
+                            
+                            ${alerteSuppressionHtml}
+                            <p style="margin-top: 15px;">${question.description ? question.description.replace(/\n/g, '<br>') : ''}</p>
+                            
+                            <div class="stats-bar" onclick="afficherDetailsVotes('${question.id}', 'question')">
+                                <span class="stat-badge stat-present" id="stat-pour-${question.id}">👍 Pour: ${nbPour}</span>
+                                <span class="stat-badge stat-absent" id="stat-contre-${question.id}">👎 Contre: ${nbContre}</span>
+                                <span class="stat-badge stat-attente" id="stat-abstention-${question.id}">🤷 Abstention: ${nbAbstention}</span>
+                            </div>
+                            
+                            ${voteSectionHtml}
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        // Fonction liée au clic sur le bandeau
+        function allerAuxSondages() {
+            // Simule un clic sur l'onglet "Sondages & Questions" (le 2ème onglet principal)
+            const btnSondages = document.querySelectorAll('.tab-btn-main')[1];
+            changerOngletPrincipal('vue-questions', btnSondages);
+        }
+
+        async function cloreQuestion(id) {
+            if (!confirm("Voulez-vous vraiment clore ce sondage ? Il n'apparaîtra plus sur la page principale.")) return;
+            
+            const { error } = await supabaseClient.from('questions').update({ actif: false }).eq('id', id);
+            
+            if (error) {
+                alert("Erreur lors de la clôture du sondage.");
+            } else {
+                await chargerQuestions();
+            }
+        }
+
+        // --- FONCTION DE VOTE COMMUNE (Soirées & Questions) ---
+        async function soumettreVote(idCible, type) {
+            let table = type === 'soiree' ? 'votes' : 'reponses';
+            let colonneCible = type === 'soiree' ? 'soiree_id' : 'question_id';
+            let colonneValeur = type === 'soiree' ? 'statut' : 'choix';
+            let selectId = type === 'soiree' ? `statut-select-${idCible}` : `reponse-select-${idCible}`;
+            
+            const valeur = document.getElementById(selectId).value;
+            const membreId = membreConnecte.id;
+
+            const dataObj = { membre_id: membreId };
+            dataObj[colonneCible] = idCible;
+            dataObj[colonneValeur] = valeur;
+
+            const { error } = await supabaseClient.from(table).upsert([dataObj], { onConflict: `${colonneCible}, membre_id` });
+
+            if (error) alert("Erreur lors de l'enregistrement.");
+            else alert("Votre choix a bien été enregistré !");
+            
+            // On met à jour l'affichage de la carte pour montrer que le bouton change
+            if(type === 'soiree') await chargerSoirees();
+            if(type === 'question') await chargerQuestions();
+        }
+
+        // --- MODALE DES DÉTAILS DE VOTES (Adaptée aux deux) ---
+        async function afficherDetailsVotes(id, type) {
+            modaleDetailsOuverteId = id;
+            modaleDetailsType = type;
+            document.getElementById('details-votes-modal').style.display = 'block';
+            const container = document.getElementById('details-votes-container');
+            container.innerHTML = '<p>Chargement des réponses...</p>';
+
+            if (type === 'soiree') {
+                document.getElementById('titre-details-modal').innerText = "Récapitulatif des présences";
+                const { data: votes } = await supabaseClient.from('votes').select('*').eq('soiree_id', id);
+                let htmlPresents = '<ul>', htmlAttente = '<ul>', htmlAbsents = '<ul>';
+                votes.forEach(v => {
+                    const m = membresList.find(m => m.id === v.membre_id);
+                    if (m) {
+                        let li = `<li>${m.prenom} ${m.nom}</li>`;
+                        if (v.statut === 'Present') htmlPresents += li; else if (v.statut === 'A confirmer') htmlAttente += li; else if (v.statut === 'Absent') htmlAbsents += li;
+                    }
+                });
+                container.innerHTML = `
+                    <div class="details-list stat-present"><h4>✅ Présents</h4> ${htmlPresents === '<ul>' ? '<p>Aucun</p>' : htmlPresents + '</ul>'}</div>
+                    <div class="details-list stat-attente"><h4>⏳ À confirmer</h4> ${htmlAttente === '<ul>' ? '<p>Aucun</p>' : htmlAttente + '</ul>'}</div>
+                    <div class="details-list stat-absent"><h4>❌ Absents</h4> ${htmlAbsents === '<ul>' ? '<p>Aucun</p>' : htmlAbsents + '</ul>'}</div>`;
+            } else {
+                document.getElementById('titre-details-modal').innerText = "Récapitulatif des réponses";
+                const { data: reponses } = await supabaseClient.from('reponses').select('*').eq('question_id', id);
+                let htmlPour = '<ul>', htmlContre = '<ul>', htmlAbs = '<ul>';
+                reponses.forEach(r => {
+                    const m = membresList.find(m => m.id === r.membre_id);
+                    if (m) {
+                        let li = `<li>${m.prenom} ${m.nom}</li>`;
+                        if (r.choix === 'Pour') htmlPour += li; else if (r.choix === 'Contre') htmlContre += li; else if (r.choix === 'Abstention') htmlAbs += li;
+                    }
+                });
+                container.innerHTML = `
+                    <div class="details-list stat-present"><h4>👍 Pour</h4> ${htmlPour === '<ul>' ? '<p>Aucun</p>' : htmlPour + '</ul>'}</div>
+                    <div class="details-list stat-absent"><h4>👎 Contre</h4> ${htmlContre === '<ul>' ? '<p>Aucun</p>' : htmlContre + '</ul>'}</div>
+                    <div class="details-list stat-attente"><h4>🤷 Abstention</h4> ${htmlAbs === '<ul>' ? '<p>Aucun</p>' : htmlAbs + '</ul>'}</div>`;
+            }
+        }
+
+        function fermerDetailsVotes() { modaleDetailsOuverteId = null; modaleDetailsType = null; document.getElementById('details-votes-modal').style.display = 'none'; }
+        
+        // --- GESTION DE LA SUPPRESSION DES SONDAGES ---
+        let questionAsupprimerId = null;
+
+        function ouvrirModalSuppression(questionId) {
+            questionAsupprimerId = questionId;
+            document.getElementById('delete-reason-text').value = '';
+            document.getElementById('modal-delete-reason').style.display = 'block';
+        }
+
+        function fermerModalSuppression() {
+            questionAsupprimerId = null;
+            document.getElementById('modal-delete-reason').style.display = 'none';
+        }
+
+        async function soumettreDemandeSuppression() {
+            const motif = document.getElementById('delete-reason-text').value.trim();
+            if (!motif) return alert("Vous devez obligatoirement fournir une justification.");
+
+            const { error } = await supabaseClient.from('questions')
+                .update({ en_demande_suppression: true, motif_suppression: motif })
+                .eq('id', questionAsupprimerId);
+
+            if (error) {
+                alert("Erreur lors de la demande de suppression.");
+            } else {
+                fermerModalSuppression();
+                alert("La demande de retrait a été transmise avec votre justification.");
+                await chargerQuestions();
+            }
+        }
+
+        async function confirmerSuppressionDefinitive(questionId) {
+            if (!confirm("Voulez-vous vraiment supprimer définitivement ce sondage et tous les votes associés ?")) return;
+
+            const { error } = await supabaseClient.from('questions').delete().eq('id', questionId);
+
+            if (error) {
+                alert("Erreur lors de la suppression.");
+            } else {
+                alert("Sondage supprimé.");
+                await chargerQuestions();
+            }
+        }
+
+        // --- GESTION DE LA SUPPRESSION PAR L'AUTEUR (Historique) ---
+        let questionAsupprimerAuteurId = null;
+
+        function ouvrirModalSuppressionAuteur(id) {
+            questionAsupprimerAuteurId = id;
+            document.getElementById('delete-author-reason-text').value = '';
+            document.getElementById('modal-delete-author-reason').style.display = 'block';
+        }
+
+        function fermerModalSuppressionAuteur() {
+            questionAsupprimerAuteurId = null;
+            document.getElementById('modal-delete-author-reason').style.display = 'none';
+        }
+
+        async function soumettreSuppressionAuteur() {
+            const motif = document.getElementById('delete-author-reason-text').value.trim();
+            
+            // On le marque comme "supprimé" (gardé en historique) et "inactif" (plus de votes)
+            const { error } = await supabaseClient.from('questions')
+                .update({ supprime: true, actif: false, motif_suppression: motif })
+                .eq('id', questionAsupprimerAuteurId);
+
+            if (error) {
+                alert("Erreur lors de la suppression.");
+            } else {
+                fermerModalSuppressionAuteur();
+                await chargerQuestions();
+            }
+        }
+
+        // --- GESTION DE L'ANNULATION DES SOIRÉES ---
+        let soireeAAnnulerId = null;
+
+        function ouvrirModalAnnulationSoiree(id) {
+            soireeAAnnulerId = id;
+            document.getElementById('cancel-soiree-reason').value = '';
+            document.getElementById('modal-cancel-soiree').style.display = 'block';
+        }
+
+        function fermerModalAnnulationSoiree() {
+            soireeAAnnulerId = null;
+            document.getElementById('modal-cancel-soiree').style.display = 'none';
+        }
+
+        async function soumettreAnnulationSoiree() {
+            const motif = document.getElementById('cancel-soiree-reason').value.trim();
+            if (!motif) return alert("Veuillez indiquer un motif d'annulation.");
+
+            const { error } = await supabaseClient.from('soirees')
+                .update({ annulee: true, motif_annulation: motif })
+                .eq('id', soireeAAnnulerId);
+
+            if (error) {
+                alert("Erreur lors de l'annulation de la soirée.");
+            } else {
+                fermerModalAnnulationSoiree();
+                await chargerSoirees();
+            }
+        }
+
+        // --- REALTIME ---
+        function ecouterRealtime() {
+            // Écoute des votes (Soirées)
+            supabaseClient.channel('public:votes').on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, async () => {
+                const { data: votes } = await supabaseClient.from('votes').select('*');
+                document.querySelectorAll('[id^="stat-present-"]').forEach(el => {
+                    const soireeId = el.id.replace('stat-present-', '');
+                    const vSoiree = votes.filter(v => v.soiree_id === soireeId);
+                    document.getElementById(`stat-present-${soireeId}`).innerText = `✅ Présents: ${vSoiree.filter(v => v.statut === 'Present').length}`;
+                    document.getElementById(`stat-attente-${soireeId}`).innerText = `⏳ À confirmer: ${vSoiree.filter(v => v.statut === 'A confirmer').length}`;
+                    document.getElementById(`stat-absent-${soireeId}`).innerText = `❌ Absents: ${vSoiree.filter(v => v.statut === 'Absent').length}`;
+                });
+                if (modaleDetailsOuverteId && modaleDetailsType === 'soiree') afficherDetailsVotes(modaleDetailsOuverteId, 'soiree');
+            }).subscribe();
+
+            // Écoute des réponses (Sondages)
+            supabaseClient.channel('public:reponses').on('postgres_changes', { event: '*', schema: 'public', table: 'reponses' }, async () => {
+                const { data: reponses } = await supabaseClient.from('reponses').select('*');
+                document.querySelectorAll('[id^="stat-pour-"]').forEach(el => {
+                    const qId = el.id.replace('stat-pour-', '');
+                    const rQuest = reponses.filter(r => r.question_id === qId);
+                    document.getElementById(`stat-pour-${qId}`).innerText = `👍 Pour: ${rQuest.filter(r => r.choix === 'Pour').length}`;
+                    document.getElementById(`stat-contre-${qId}`).innerText = `👎 Contre: ${rQuest.filter(r => r.choix === 'Contre').length}`;
+                    document.getElementById(`stat-abstention-${qId}`).innerText = `🤷 Abstention: ${rQuest.filter(r => r.choix === 'Abstention').length}`;
+                });
+                if (modaleDetailsOuverteId && modaleDetailsType === 'question') afficherDetailsVotes(modaleDetailsOuverteId, 'question');
+            }).subscribe();
+        }
+
         init();
     </script>
 </body>
