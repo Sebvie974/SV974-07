@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Astro Asso - Gestion des Soirées</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            max-width: 800px; 
+            margin: auto; 
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        h1 { text-align: center; color: #2c3e50; }
+        
+        .add-member-section { 
+            background: #ffffff; 
+            padding: 20px; 
+            border-radius: 8px; 
+            margin-bottom: 25px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .add-member-section input, .add-member-section button {
+            padding: 10px;
+            margin-top: 5px;
+        }
+        .add-member-section button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .soiree-card { 
+            background: #ffffff; 
+            border-left: 5px solid #2980b9; 
+            padding: 20px; 
+            margin-bottom: 20px; 
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .vote-section { 
+            margin-top: 15px; 
+            padding-top: 15px; 
+            border-top: 1px solid #eee; 
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .vote-section select, .vote-section button {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Soirées Astronomie 🔭</h1>
+
+    <div class="add-member-section">
+        <h3>Ajouter un nouveau membre</h3>
+        <input type="text" id="new-member-name" placeholder="Ex: Jean Dupont">
+        <button onclick="ajouterMembre()">Créer le membre</button>
+    </div>
+
+    <div id="soirees-container">
+        <p>Chargement des soirées...</p>
+    </div>
+
+    <script>
+        // ----------------------------------------------------
+        // INITIALISATION DE SUPABASE
+        // ----------------------------------------------------
+        const SUPABASE_URL = 'https://zwbwkhqyjeeykixtpldi.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_RdxzQzvTpjj8nS1B2hDpmw_w4GH_9UC';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let membresList = [];
+
+        // Fonction exécutée au lancement de la page
+        async function init() {
+            await chargerMembres();
+            await chargerSoirees();
+        }
+
+        // ----------------------------------------------------
+        // GESTION DES MEMBRES
+        // ----------------------------------------------------
+        async function chargerMembres() {
+            const { data, error } = await supabase.from('membres').select('*').order('nom', { ascending: true });
+            if (error) console.error("Erreur membres:", error);
+            else membresList = data;
+        }
+
+        async function ajouterMembre() {
+            const nomInput = document.getElementById('new-member-name');
+            const nom = nomInput.value.trim();
+            if (!nom) return alert("Veuillez entrer un nom.");
+
+            const { error } = await supabase.from('membres').insert([{ nom: nom }]);
+            
+            if (error) {
+                console.error("Erreur création membre:", error);
+                alert("Erreur lors de la création.");
+            } else {
+                nomInput.value = ''; // On vide la case
+                await chargerMembres(); // On met à jour la liste en mémoire
+                await chargerSoirees(); // On rafraîchit l'affichage pour mettre à jour les menus déroulants
+            }
+        }
+
+        // ----------------------------------------------------
+        // GESTION DES SOIRÉES ET AFFICHAGE
+        // ----------------------------------------------------
+        async function chargerSoirees() {
+            const container = document.getElementById('soirees-container');
+            
+            // Récupération des soirées depuis Supabase
+            const { data: soirees, error } = await supabase.from('soirees').select('*').order('date', { ascending: true });
+            
+            if (error) {
+                container.innerHTML = '<p>Erreur de connexion à la base de données.</p>';
+                return;
+            }
+
+            if (soirees.length === 0) {
+                container.innerHTML = '<p>Aucune soirée n\'est programmée pour le moment. Ajoutez-en une dans Supabase !</p>';
+                return;
+            }
+
+            container.innerHTML = ''; // On vide le conteneur avant de le remplir
+
+            // On boucle sur chaque soirée pour créer son affichage
+            soirees.forEach(soiree => {
+                // Formatage de la date en français
+                const dateFormattee = new Date(soiree.date).toLocaleDateString('fr-FR', { 
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+                });
+                
+                // Préparation du menu déroulant avec les membres actuels
+                let membresOptions = membresList.map(m => `<option value="${m.id}">${m.nom}</option>`).join('');
+
+                const cardHtml = `
+                    <div class="soiree-card">
+                        <h2>${soiree.titre}</h2>
+                        <p><strong>📅 Date :</strong> ${dateFormattee}</p>
+                        <p><strong>📍 Lieu :</strong> ${soiree.lieu || 'Non précisé'}</p>
+                        <p>${soiree.description || ''}</p>
+                        
+                        <div class="vote-section">
+                            <select id="membre-select-${soiree.id}">
+                                <option value="">-- Qui êtes-vous ? --</option>
+                                ${membresOptions}
+                            </select>
+                            
+                            <select id="statut-select-${soiree.id}">
+                                <option value="Present">✅ Présent</option>
+                                <option value="A confirmer">⏳ À confirmer</option>
+                                <option value="Absent">❌ Absent</option>
+                            </select>
+                            
+                            <button onclick="soumettreVote('${soiree.id}')">Enregistrer mon vote</button>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += cardHtml;
+            });
+        }
+
+        // ----------------------------------------------------
+        // GESTION DES VOTES
+        // ----------------------------------------------------
+        async function soumettreVote(soireeId) {
+            const membreId = document.getElementById(`membre-select-${soireeId}`).value;
+            const statut = document.getElementById(`statut-select-${soireeId}`).value;
+
+            if (!membreId) return alert("Veuillez sélectionner votre nom dans la liste.");
+
+            // Upsert: Si une ligne existe déjà avec ce soiree_id et membre_id, on la met à jour. Sinon on la crée.
+            const { error } = await supabase
+                .from('votes')
+                .upsert(
+                    [{ soiree_id: soireeId, membre_id: membreId, statut: statut }], 
+                    { onConflict: 'soiree_id, membre_id' }
+                );
+
+            if (error) {
+                console.error("Erreur de vote:", error);
+                alert("Erreur lors de l'enregistrement du vote.");
+            } else {
+                alert("Vote enregistré avec succès !");
+            }
+        }
+
+        // Démarrage
+        init();
+    </script>
+</body>
+</html>
