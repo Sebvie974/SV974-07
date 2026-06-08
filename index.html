@@ -97,6 +97,14 @@
         <button class="btn-creer" onclick="seConnecter()">Se connecter</button>
     </div>
 
+    <div id="force-mdp-screen" style="display: none; background: #fff; padding: 30px; border-radius: 8px; max-width: 400px; margin: 50px auto; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+        <h2 style="color: #e67e22;">Première connexion</h2>
+        <p>Pour des raisons de sécurité, veuillez personnaliser votre mot de passe.</p>
+        <input type="password" id="new-force-mdp" placeholder="Nouveau mot de passe" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+        <input type="password" id="confirm-force-mdp" placeholder="Confirmer le mot de passe" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+        <button class="btn-creer" onclick="validerNouveauMdp()">Enregistrer et me connecter</button>
+    </div>
+
     <div id="main-app">
         <div class="user-header">
             <div>
@@ -271,6 +279,15 @@
         let modaleDetailsOuverteId = null; // Mémorise l'ID de la soirée ou question affichée en détail
         let modaleDetailsType = null; // 'soiree' ou 'question'
 
+        // --- FONCTION DE SÉCURITÉ (Hachage SHA-256) ---
+        async function hacherMotDePasse(mdpClair) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(mdpClair);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
         async function init() {
             const savedUser = localStorage.getItem('astroUser');
             if (savedUser) {
@@ -303,18 +320,55 @@
         // --- CONNEXION ---
         async function seConnecter() {
             const email = document.getElementById('login-email').value.trim();
-            const mdp = document.getElementById('login-mdp').value.trim();
-            if (!email || !mdp) return alert("Veuillez remplir tous les champs.");
+            const mdpClair = document.getElementById('login-mdp').value.trim();
 
-            const { data, error } = await supabaseClient.from('membres').select('*').eq('email', email).eq('mot_de_passe', mdp).single();
+            if (!email || !mdpClair) return alert("Veuillez remplir tous les champs.");
+
+            // On hache le mot de passe tapé avant de le comparer avec la base
+            const mdpHache = await hacherMotDePasse(mdpClair);
+
+            const { data, error } = await supabaseClient.from('membres').select('*').eq('email', email).eq('mot_de_passe', mdpHache).single();
 
             if (error || !data) {
                 alert("E-mail ou mot de passe incorrect.");
             } else if (data.actif === false) {
                 alert("Votre compte a été désactivé. Veuillez contacter un membre du bureau.");
             } else {
-                membreConnecte = data;
-                localStorage.setItem('astroUser', JSON.stringify(data)); 
+                membreConnecte = data; // On garde le membre en mémoire
+                
+                // Vérification de la première connexion
+                if (data.premiere_connexion) {
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('force-mdp-screen').style.display = 'block';
+                } else {
+                    localStorage.setItem('astroUser', JSON.stringify(data)); 
+                    afficherApp();
+                }
+            }
+        }
+
+        // Nouvelle fonction appelée par le bouton du nouvel écran
+        async function validerNouveauMdp() {
+            const mdp1 = document.getElementById('new-force-mdp').value.trim();
+            const mdp2 = document.getElementById('confirm-force-mdp').value.trim();
+
+            if (!mdp1 || !mdp2) return alert("Veuillez remplir les deux champs.");
+            if (mdp1 !== mdp2) return alert("Les mots de passe ne correspondent pas.");
+            if (mdp1.length < 6) return alert("Le mot de passe doit faire au moins 6 caractères.");
+
+            const nouveauMdpHache = await hacherMotDePasse(mdp1);
+
+            const { error } = await supabaseClient.from('membres')
+                .update({ mot_de_passe: nouveauMdpHache, premiere_connexion: false })
+                .eq('id', membreConnecte.id);
+
+            if (error) {
+                alert("Erreur lors de la mise à jour du mot de passe.");
+            } else {
+                alert("Mot de passe mis à jour avec succès !");
+                membreConnecte.premiere_connexion = false; // On met à jour l'objet local
+                document.getElementById('force-mdp-screen').style.display = 'none';
+                localStorage.setItem('astroUser', JSON.stringify(membreConnecte)); 
                 afficherApp();
             }
         }
@@ -421,10 +475,29 @@
         }
 
         async function sauvegarderMembre() {
-            const prenom = document.getElementById('new-prenom').value.trim(); const nom = document.getElementById('new-nom').value.trim();
-            const email = document.getElementById('new-email').value.trim(); const mdp = document.getElementById('new-mdp').value.trim();
-            if (!prenom || !nom || !email || !mdp) return alert("Prénom, nom, e-mail et mot de passe obligatoires.");
-            const dataObj = { prenom: prenom, nom: nom, telephone: document.getElementById('new-tel').value.trim(), region: document.getElementById('new-region').value.trim(), email: email, mot_de_passe: mdp, role: document.getElementById('new-role').value };
+            const prenom = document.getElementById('new-prenom').value.trim(); 
+            const nom = document.getElementById('new-nom').value.trim();
+            const email = document.getElementById('new-email').value.trim(); 
+            const mdpClair = document.getElementById('new-mdp').value.trim();
+            
+            // Lors d'une création, le mot de passe est obligatoire. En modification, on peut le laisser vide si on ne veut pas le changer.
+            if (!prenom || !nom || !email) return alert("Prénom, nom et e-mail sont obligatoires.");
+            if (!membreEditionId && !mdpClair) return alert("Veuillez saisir un mot de passe provisoire.");
+
+            const dataObj = { 
+                prenom: prenom, 
+                nom: nom, 
+                telephone: document.getElementById('new-tel').value.trim(), 
+                region: document.getElementById('new-region').value.trim(), 
+                email: email, 
+                role: document.getElementById('new-role').value 
+            };
+
+            // Si un mot de passe a été tapé, on le hache et on force le membre à le changer à sa connexion
+            if (mdpClair) {
+                dataObj.mot_de_passe = await hacherMotDePasse(mdpClair);
+                dataObj.premiere_connexion = true;
+            }
 
             if (membreEditionId) {
                 const { error } = await supabaseClient.from('membres').update(dataObj).eq('id', membreEditionId);
