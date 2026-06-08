@@ -527,13 +527,25 @@
         function preparerEditionSoiree(id, titre, date, lieu, description) {
             soireeEditionId = id;
             document.getElementById('new-soiree-titre').value = titre || '';
-            if (date) { const d = new Date(date); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); document.getElementById('new-soiree-date').value = d.toISOString().slice(0,16); }
+            
+            if (date) {
+                // On recrée la date exacte depuis la base
+                const d = new Date(date);
+                
+                // FIX : On compense dynamiquement le décalage (GMT+4) pour ré-afficher la bonne heure locale dans l'input
+                const dLocale = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+                document.getElementById('new-soiree-date').value = dLocale.toISOString().slice(0, 16);
+            }
+            
             document.getElementById('new-soiree-lieu').value = lieu || '';
             document.getElementById('new-soiree-desc').value = description || '';
+
             document.getElementById('btn-save-soiree').innerText = "Mettre à jour la soirée";
             document.getElementById('btn-save-soiree').style.backgroundColor = "#f39c12";
             document.getElementById('btn-cancel-soiree-edit').style.display = "block";
-            accederAdmin(); changerOngletAdmin('soirees', document.querySelectorAll('.tab-btn-admin')[1]);
+            
+            accederAdmin(); 
+            changerOngletAdmin('soirees', document.querySelectorAll('.tab-btn-admin')[1]);
         }
 
         function annulerEditionSoiree() {
@@ -546,9 +558,20 @@
         }
 
         async function ajouterSoiree() {
-            const titre = document.getElementById('new-soiree-titre').value.trim(); const date = document.getElementById('new-soiree-date').value;
-            if (!titre || !date) return alert("Le titre et la date sont obligatoires.");
-            const dataObj = { titre: titre, date: date, lieu: document.getElementById('new-soiree-lieu').value.trim(), description: document.getElementById('new-soiree-desc').value.trim() };
+            const titre = document.getElementById('new-soiree-titre').value.trim(); 
+            const dateInput = document.getElementById('new-soiree-date').value;
+            
+            if (!titre || !dateInput) return alert("Le titre et la date sont obligatoires.");
+
+            // FIX : On convertit l'heure locale saisie en heure universelle standard (UTC) avant l'envoi
+            const datePourBase = new Date(dateInput).toISOString();
+
+            const dataObj = { 
+                titre: titre, 
+                date: datePourBase, 
+                lieu: document.getElementById('new-soiree-lieu').value.trim(), 
+                description: document.getElementById('new-soiree-desc').value.trim() 
+            };
 
             if (soireeEditionId) {
                 const { error } = await supabaseClient.from('soirees').update(dataObj).eq('id', soireeEditionId);
@@ -570,8 +593,19 @@
 
             container.innerHTML = ''; 
             soirees.forEach(soiree => {
-                const objDate = new Date(soiree.date);
-                const affichageDate = objDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' à ' + objDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                // Sécurité de fenêtrage : on remplace le 'T' par un espace si aucun fuseau n'est spécifié.
+                // Cela force la majorité des navigateurs à interpréter la date comme une heure locale.
+                let dateStr = soiree.date;
+                if (!dateStr.includes('Z') && !dateStr.includes('+') && dateStr.includes('T')) {
+                    dateStr = dateStr.replace('T', ' ');
+                }
+                
+                const objDate = new Date(dateStr);
+
+                // Options de formatage forçant explicitement le fuseau horaire de La Réunion (GMT+4)
+                const optionsDate = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Indian/Reunion' };
+                const optionsHeure = { hour: '2-digit', minute: '2-digit', timeZone: 'Indian/Reunion' };
+                const affichageDate = objDate.toLocaleDateString('fr-FR', optionsDate) + ' à ' + objDate.toLocaleTimeString('fr-FR', optionsHeure);
 
                 const votesSoiree = votes.filter(v => v.soiree_id === soiree.id);
                 const nbPresents = votesSoiree.filter(v => v.statut === 'Present').length;
@@ -582,7 +616,6 @@
                 if (membreConnecte) { const monVote = votesSoiree.find(v => v.membre_id === membreConnecte.id); if (monVote) monStatut = monVote.statut; }
 
                 if (soiree.annulee) {
-                    // MODE HISTORIQUE (Soirée annulée)
                     const motifTexte = soiree.motif_annulation ? `"${soiree.motif_annulation}"` : "Aucun motif précisé.";
                     
                     container.innerHTML += `
@@ -603,7 +636,6 @@
                         </div>
                     `;
                 } else {
-                    // MODE NORMAL
                     let btnEditHtml = '';
                     let btnCancelHtml = '';
                     
@@ -616,9 +648,10 @@
                         btnCancelHtml = `<button class="btn-delete" style="float: right;" onclick="ouvrirModalAnnulationSoiree('${soiree.id}')">🛑 Annuler</button>`;
                     }
 
+                    // Calcul de l'alerte basé sur la date locale bien interprétée
                     const maintenant = new Date();
                     maintenant.setHours(0,0,0,0);
-                    const dateSoireePure = new Date(soiree.date);
+                    const dateSoireePure = new Date(objDate);
                     dateSoireePure.setHours(0,0,0,0);
                     
                     const diffTemps = dateSoireePure.getTime() - maintenant.getTime();
