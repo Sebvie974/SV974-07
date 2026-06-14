@@ -147,7 +147,8 @@
         <div class="tabs">
             <button class="tab-btn active tab-btn-main" onclick="changerOngletPrincipal('vue-soirees', this)">🔭 Soirées</button>
             <button class="tab-btn tab-btn-main" onclick="changerOngletPrincipal('vue-questions', this)">❓ Sondages & Questions</button>
-            <button class="tab-btn tab-btn-main" onclick="changerOngletPrincipal('vue-archives', this)">📂 Archives Soirées</button>
+            <button class="tab-btn tab-btn-main" onclick="changerOngletPrincipal('vue-archives', this)">📂 Archives</button>
+            <button class="tab-btn tab-btn-main" onclick="changerOngletPrincipal('vue-materiel', this)">🧰 Matériel du club</button>
         </div>
 
         <div id="onglet-vue-soirees" class="tab-content tab-content-main active">
@@ -166,6 +167,13 @@
 
             <div id="questions-container"><p>Chargement des questions...</p></div>
         </div>
+        </div>
+
+        <div id="onglet-vue-materiel" class="tab-content tab-content-main">
+            <button id="btn-add-materiel" class="btn-creer" style="background-color: #e67e22; width: auto; margin-bottom: 20px; display: none;" onclick="ouvrirModalMateriel()">
+                ➕ Ajouter un équipement
+            </button>
+            <div id="materiel-container"><p>Chargement de l'inventaire...</p></div>
         </div>
     </div>
 
@@ -293,6 +301,13 @@
             </div>
         </div>
     </div>
+
+    <div id="onglet-vue-materiel" class="tab-content tab-content-main">
+            <button id="btn-add-materiel" class="btn-creer" style="background-color: #e67e22; width: auto; margin-bottom: 20px; display: none;" onclick="ouvrirModalMateriel()">
+                ➕ Ajouter un équipement
+            </button>
+            <div id="materiel-container"><p>Chargement de l'inventaire...</p></div>
+        </div>
 
     <script>
         const SUPABASE_URL = 'https://zwbwkhqyjeeykixtpldi.supabase.co';
@@ -429,6 +444,7 @@
             await chargerMembres();
             await chargerSoirees();
             await chargerQuestions();
+            await chargerMateriel();
             ecouterRealtime();
         }
 
@@ -1244,6 +1260,131 @@
                 alert("Une erreur est survenue lors de l'activation des notifications.");
             }
         }
+
+    // --- GESTION DU MATÉRIEL DU CLUB ---
+        let materielAPreterId = null;
+
+        async function chargerMateriel() {
+            const container = document.getElementById('materiel-container');
+            const btnAdd = document.getElementById('btn-add-materiel');
+
+            // Sécurisation de l'interface d'ajout
+            if (membreConnecte && membreConnecte.role === 'Bureau') {
+                if(btnAdd) btnAdd.style.display = 'block';
+            } else {
+                if(btnAdd) btnAdd.style.display = 'none';
+            }
+
+            const { data: materiels, error } = await supabaseClient.from('materiel').select('*').order('designation', { ascending: true });
+            
+            if (error || !materiels) return;
+
+            if (materiels.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#7f8c8d;">L\'inventaire du club est vide pour le moment.</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            materiels.forEach(item => {
+                let etatHtml = '';
+                if (item.etat === 'Neuf') etatHtml = '<span style="color:#27ae60; font-weight:bold;">✨ Neuf</span>';
+                else if (item.etat === 'Occasion') etatHtml = '<span style="color:#f39c12; font-weight:bold;">🔄 Occasion</span>';
+                else if (item.etat === 'En réparation') etatHtml = '<span style="color:#c0392b; font-weight:bold;">🛠️ En réparation</span>';
+
+                // Gestion de l'affichage du statut du prêt
+                let pretHtml = '<div style="margin-top: 10px; padding: 8px; background: #e8f8f5; border-radius: 4px; color:#27ae60; font-weight:bold;">✅ Disponible au club</div>';
+                
+                if (item.emprunteur_id) {
+                    const emprunteur = membresList.find(m => m.id === item.emprunteur_id);
+                    const nomEmprunteur = emprunteur ? `${emprunteur.prenom} ${emprunteur.nom}` : 'Membre inconnu';
+                    const dateEmprunt = new Date(item.date_emprunt).toLocaleDateString('fr-FR');
+                    pretHtml = `<div style="margin-top: 10px; padding: 8px; background: #fef5e7; border-radius: 4px; color:#d35400; font-weight:bold;">🤝 Emprunté par ${nomEmprunteur} (depuis le ${dateEmprunt})</div>`;
+                }
+
+                // Boutons d'action exclusifs au Bureau
+                let btnPretHtml = '';
+                if (membreConnecte && membreConnecte.role === 'Bureau') {
+                    if (item.emprunteur_id) {
+                        btnPretHtml = `<button class="btn-edit" style="float: right; background-color:#27ae60;" onclick="retournerMateriel('${item.id}')">📥 Rendu</button>`;
+                    } else {
+                        btnPretHtml = `<button class="btn-edit" style="float: right; background-color:#3498db;" onclick="ouvrirModalPret('${item.id}', '${item.designation.replace(/'/g, "\\'")}')">📤 Prêter</button>`;
+                    }
+                }
+
+                const dateAcq = item.date_acquisition ? new Date(item.date_acquisition).toLocaleDateString('fr-FR') : 'Inconnue';
+
+                container.innerHTML += `
+                    <div class="question-card">
+                        ${btnPretHtml}
+                        <h3 style="margin-bottom: 5px; margin-top: 0;">${item.designation}</h3>
+                        <p style="font-size: 14px; color: #7f8c8d; margin-top: 0;">Acquis le : ${dateAcq} &nbsp;|&nbsp; ${etatHtml}</p>
+                        ${pretHtml}
+                    </div>
+                `;
+            });
+        }
+
+        // Fonctions d'ouverture/fermeture des modales
+        function ouvrirModalMateriel() { document.getElementById('modal-create-materiel').style.display = 'block'; }
+        function fermerModalMateriel() { document.getElementById('modal-create-materiel').style.display = 'none'; }
+
+        function ouvrirModalPret(id, designation) {
+            materielAPreterId = id;
+            document.getElementById('titre-pret-materiel').innerText = `Prêter : ${designation}`;
+            
+            const select = document.getElementById('select-emprunteur');
+            select.innerHTML = '<option value="" disabled selected>-- Choisir un membre --</option>';
+            // On remplit le menu déroulant avec les membres actifs
+            membresList.filter(m => m.actif !== false).forEach(m => {
+                select.innerHTML += `<option value="${m.id}">${m.prenom} ${m.nom}</option>`;
+            });
+            
+            document.getElementById('modal-manage-pret').style.display = 'block';
+        }
+        function fermerModalPret() { document.getElementById('modal-manage-pret').style.display = 'none'; }
+
+        // Actions en base de données
+        async function soumettreMateriel() {
+            const desig = document.getElementById('new-mat-designation').value.trim();
+            const date = document.getElementById('new-mat-date').value;
+            const etat = document.getElementById('new-mat-etat').value;
+
+            if (!desig) return alert("La désignation est obligatoire.");
+
+            const { error } = await supabaseClient.from('materiel').insert([{ designation: desig, date_acquisition: date || null, etat: etat }]);
+            if (error) alert("Erreur lors de l'ajout.");
+            else {
+                document.getElementById('new-mat-designation').value = '';
+                fermerModalMateriel();
+                await chargerMateriel();
+            }
+        }
+
+        async function soumettrePret() {
+            const membreId = document.getElementById('select-emprunteur').value;
+            if (!membreId) return alert("Veuillez sélectionner un membre.");
+
+            const { error } = await supabaseClient.from('materiel')
+                .update({ emprunteur_id: membreId, date_emprunt: new Date().toISOString() })
+                .eq('id', materielAPreterId);
+
+            if (error) alert("Erreur lors de l'attribution du prêt.");
+            else {
+                fermerModalPret();
+                await chargerMateriel();
+            }
+        }
+
+        async function retournerMateriel(id) {
+            if (!confirm("Confirmez-vous que ce matériel a bien été rendu au club ?")) return;
+
+            const { error } = await supabaseClient.from('materiel')
+                .update({ emprunteur_id: null, date_emprunt: null })
+                .eq('id', id);
+
+            if (error) alert("Erreur lors du retour.");
+            else await chargerMateriel();
+        }    
 
         init();
     </script>
