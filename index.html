@@ -107,6 +107,22 @@
                 width: 100%; /* Les boutons prennent toute la largeur */
                 box-sizing: border-box;
             }
+            /* --- CORRECTION DU BANDEAU DES ONGLETS SUR MOBILE --- */
+        .tabs {
+            display: flex;
+            flex-wrap: wrap; /* Autorise le passage à la ligne */
+            gap: 5px; /* Espace entre les boutons */
+            justify-content: center;
+        }
+        
+        .tabs .tab-btn {
+            flex: 1 1 45%; /* Chaque bouton prend environ la moitié de la largeur */
+            font-size: 13px; /* Police légèrement plus petite pour que tout rentre */
+            padding: 10px 5px; /* Ajustement des marges internes */
+            margin: 0; /* On annule les anciennes marges */
+            box-sizing: border-box;
+            border-radius: 4px; /* Un peu d'arrondi pour faire plus "bouton d'application" */
+        }
         }
 
     </style>
