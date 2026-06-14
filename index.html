@@ -309,6 +309,40 @@
             <div id="materiel-container"><p>Chargement de l'inventaire...</p></div>
         </div>
 
+    <!-- MODALE CRÉATION MATÉRIEL (Bureau) -->
+    <div id="modal-create-materiel" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close-btn" onclick="fermerModalMateriel()">&times;</span>
+            <div class="form-section" style="margin-bottom: 0; background: transparent; padding: 0;">
+                <h3 style="color: #e67e22;">🧰 Référencer un équipement</h3>
+                <input type="text" id="new-mat-designation" class="full-width" placeholder="Désignation (ex: Oculaire Morpheus 12.5mm)" style="margin-bottom: 10px;">
+                <label style="font-size: 14px; color: #7f8c8d;">Date d'acquisition :</label>
+                <input type="date" id="new-mat-date" class="full-width" style="margin-bottom: 10px;">
+                <select id="new-mat-etat" class="full-width" style="margin-bottom: 10px;">
+                    <option value="Neuf">✨ État : Neuf</option>
+                    <option value="Occasion">🔄 État : Occasion</option>
+                    <option value="En réparation">🛠️ État : En réparation</option>
+                </select>
+                <button class="btn-creer" style="background-color: #e67e22;" onclick="soumettreMateriel()">Ajouter à l'inventaire</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE ATTRIBUTION DE PRÊT (Bureau) -->
+    <div id="modal-manage-pret" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close-btn" onclick="fermerModalPret()">&times;</span>
+            <div class="form-section" style="margin-bottom: 0; background: transparent; padding: 0;">
+                <h3 style="color: #3498db;" id="titre-pret-materiel">📤 Prêter un équipement</h3>
+                <p>Sélectionnez le membre à qui cet équipement est confié :</p>
+                <select id="select-emprunteur" class="full-width" style="margin-bottom: 15px;">
+                    <!-- Rempli dynamiquement -->
+                </select>
+                <button class="btn-creer" style="background-color: #3498db;" onclick="soumettrePret()">Confirmer le prêt</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SUPABASE_URL = 'https://zwbwkhqyjeeykixtpldi.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_RdxzQzvTpjj8nS1B2hDpmw_w4GH_9UC';
@@ -1387,6 +1421,8 @@
         }    
 
         init();
+
+
     </script>
 </body>
 </html>
