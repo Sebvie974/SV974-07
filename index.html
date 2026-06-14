@@ -185,8 +185,10 @@
         </div>
         </div>
 
+        <!-- NOUVEAU : CONTENEUR MATÉRIEL -->
         <div id="onglet-vue-materiel" class="tab-content tab-content-main">
-            <button id="btn-add-materiel" class="btn-creer" style="background-color: #e67e22; width: auto; margin-bottom: 20px; display: none;" onclick="ouvrirModalMateriel()">
+            <!-- Ce bouton sera caché pour les membres standards via Javascript -->
+            <button id="btn-add-materiel" class="btn-creer" style="background-color: #e67e22; width: auto; margin-bottom: 20px; display: none;" onclick="ouvrirCreationMateriel()">
                 ➕ Ajouter un équipement
             </button>
             <div id="materiel-container"><p>Chargement de l'inventaire...</p></div>
@@ -328,9 +330,9 @@
     <!-- MODALE CRÉATION MATÉRIEL (Bureau) -->
     <div id="modal-create-materiel" class="modal-overlay">
         <div class="modal-content" style="max-width: 500px;">
-            <span class="close-btn" onclick="fermerModalMateriel()">&times;</span>
+            <span class="close-btn" onclick="annulerEditionMateriel()">&times;</span>
             <div class="form-section" style="margin-bottom: 0; background: transparent; padding: 0;">
-                <h3 style="color: #e67e22;">🧰 Référencer un équipement</h3>
+                <h3 style="color: #e67e22;" id="titre-modal-materiel">🧰 Référencer un équipement</h3>
                 <input type="text" id="new-mat-designation" class="full-width" placeholder="Désignation (ex: Oculaire Morpheus 12.5mm)" style="margin-bottom: 10px;">
                 <label style="font-size: 14px; color: #7f8c8d;">Date d'acquisition :</label>
                 <input type="date" id="new-mat-date" class="full-width" style="margin-bottom: 10px;">
@@ -339,7 +341,7 @@
                     <option value="Occasion">🔄 État : Occasion</option>
                     <option value="En réparation">🛠️ État : En réparation</option>
                 </select>
-                <button class="btn-creer" style="background-color: #e67e22;" onclick="soumettreMateriel()">Ajouter à l'inventaire</button>
+                <button id="btn-save-materiel" class="btn-creer" style="background-color: #e67e22;" onclick="soumettreMateriel()">Ajouter à l'inventaire</button>
             </div>
         </div>
     </div>
@@ -1323,12 +1325,12 @@
 
     // --- GESTION DU MATÉRIEL DU CLUB ---
         let materielAPreterId = null;
+        let materielEditionId = null; // NOUVEAU : Retient l'ID du matériel en cours de modification
 
         async function chargerMateriel() {
             const container = document.getElementById('materiel-container');
             const btnAdd = document.getElementById('btn-add-materiel');
 
-            // Sécurisation de l'interface d'ajout
             if (membreConnecte && membreConnecte.role === 'Bureau') {
                 if(btnAdd) btnAdd.style.display = 'block';
             } else {
@@ -1336,7 +1338,6 @@
             }
 
             const { data: materiels, error } = await supabaseClient.from('materiel').select('*').order('designation', { ascending: true });
-            
             if (error || !materiels) return;
 
             if (materiels.length === 0) {
@@ -1351,7 +1352,6 @@
                 else if (item.etat === 'Occasion') etatHtml = '<span style="color:#f39c12; font-weight:bold;">🔄 Occasion</span>';
                 else if (item.etat === 'En réparation') etatHtml = '<span style="color:#c0392b; font-weight:bold;">🛠️ En réparation</span>';
 
-                // Gestion de l'affichage du statut du prêt
                 let pretHtml = '<div style="margin-top: 10px; padding: 8px; background: #e8f8f5; border-radius: 4px; color:#27ae60; font-weight:bold;">✅ Disponible au club</div>';
                 
                 if (item.emprunteur_id) {
@@ -1361,22 +1361,34 @@
                     pretHtml = `<div style="margin-top: 10px; padding: 8px; background: #fef5e7; border-radius: 4px; color:#d35400; font-weight:bold;">🤝 Emprunté par ${nomEmprunteur} (depuis le ${dateEmprunt})</div>`;
                 }
 
-                // Boutons d'action exclusifs au Bureau
-                let btnPretHtml = '';
+                // --- ZONE ACTIONS EXCLUSIVES BUREAU ---
+                let actionsBureauHtml = '';
                 if (membreConnecte && membreConnecte.role === 'Bureau') {
+                    const desigSafe = item.designation.replace(/'/g, "\\'");
+                    const dateSafe = item.date_acquisition || '';
+
+                    let btnPretHtml = '';
                     if (item.emprunteur_id) {
-                        btnPretHtml = `<button class="btn-edit" style="float: right; background-color:#27ae60;" onclick="retournerMateriel('${item.id}')">📥 Rendu</button>`;
+                        btnPretHtml = `<button class="btn-edit" style="background-color:#27ae60;" onclick="retournerMateriel('${item.id}')">📥 Rendu</button>`;
                     } else {
-                        btnPretHtml = `<button class="btn-edit" style="float: right; background-color:#3498db;" onclick="ouvrirModalPret('${item.id}', '${item.designation.replace(/'/g, "\\'")}')">📤 Prêter</button>`;
+                        btnPretHtml = `<button class="btn-edit" style="background-color:#3498db;" onclick="ouvrirModalPret('${item.id}', '${desigSafe}')">📤 Prêter</button>`;
                     }
+
+                    actionsBureauHtml = `
+                        <div style="float: right; display: flex; gap: 5px; align-items: center;">
+                            <button class="btn-edit" style="background-color:#f39c12; padding: 6px 10px;" onclick="preparerEditionMateriel('${item.id}', '${desigSafe}', '${dateSafe}', '${item.etat}')" title="Modifier">⚙️</button>
+                            <button class="btn-delete" style="background-color:#e74c3c; color:white; border:none; padding: 6px 10px; border-radius:4px; cursor:pointer;" onclick="supprimerMateriel('${item.id}', '${desigSafe}')" title="Supprimer">🗑️</button>
+                            ${btnPretHtml}
+                        </div>
+                    `;
                 }
 
                 const dateAcq = item.date_acquisition ? new Date(item.date_acquisition).toLocaleDateString('fr-FR') : 'Inconnue';
 
                 container.innerHTML += `
-                    <div class="question-card">
-                        ${btnPretHtml}
-                        <h3 style="margin-bottom: 5px; margin-top: 0;">${item.designation}</h3>
+                    <div class="question-card" style="overflow: hidden;">
+                        ${actionsBureauHtml}
+                        <h3 style="margin-bottom: 5px; margin-top: 0; padding-right: 160px;">${item.designation}</h3>
                         <p style="font-size: 14px; color: #7f8c8d; margin-top: 0;">Acquis le : ${dateAcq} &nbsp;|&nbsp; ${etatHtml}</p>
                         ${pretHtml}
                     </div>
@@ -1404,6 +1416,38 @@
         function fermerModalPret() { document.getElementById('modal-manage-pret').style.display = 'none'; }
 
         // Actions en base de données
+        // Force le mode "Nouvel ajout" propre
+        function ouvrirCreationMateriel() {
+            materielEditionId = null;
+            document.getElementById('new-mat-designation').value = '';
+            document.getElementById('new-mat-date').value = '';
+            document.getElementById('new-mat-etat').value = 'Neuf';
+            document.getElementById('titre-modal-materiel').innerText = "🧰 Référencer un équipement";
+            document.getElementById('btn-save-materiel').innerText = "Ajouter à l'inventaire";
+            document.getElementById('btn-save-materiel').style.backgroundColor = "#e67e22";
+            document.getElementById('modal-create-materiel').style.display = 'block';
+        }
+
+        // Remplit la modale avec les données existantes pour modification
+        function preparerEditionMateriel(id, designation, date, etat) {
+            materielEditionId = id;
+            document.getElementById('new-mat-designation').value = designation || '';
+            document.getElementById('new-mat-date').value = date || '';
+            document.getElementById('new-mat-etat').value = etat || 'Neuf';
+
+            document.getElementById('titre-modal-materiel').innerText = "⚙️ Modifier l'équipement";
+            document.getElementById('btn-save-materiel').innerText = "Mettre à jour";
+            document.getElementById('btn-save-materiel').style.backgroundColor = "#f39c12";
+            document.getElementById('modal-create-materiel').style.display = 'block';
+        }
+
+        // Ferme et nettoie la modale
+        function annulerEditionMateriel() {
+            materielEditionId = null;
+            document.getElementById('modal-create-materiel').style.display = 'none';
+        }
+
+        // Gère l'Envoi (Insert ou Update selon le contexte)
         async function soumettreMateriel() {
             const desig = document.getElementById('new-mat-designation').value.trim();
             const date = document.getElementById('new-mat-date').value;
@@ -1411,11 +1455,35 @@
 
             if (!desig) return alert("La désignation est obligatoire.");
 
-            const { error } = await supabaseClient.from('materiel').insert([{ designation: desig, date_acquisition: date || null, etat: etat }]);
-            if (error) alert("Erreur lors de l'ajout.");
-            else {
-                document.getElementById('new-mat-designation').value = '';
-                fermerModalMateriel();
+            const dataObj = { designation: desig, date_acquisition: date || null, etat: etat };
+
+            if (materielEditionId) {
+                // Mode Modification (UPDATE)
+                const { error } = await supabaseClient.from('materiel').update(dataObj).eq('id', materielEditionId);
+                if (error) alert("Erreur lors de la modification.");
+                else {
+                    annulerEditionMateriel();
+                    await chargerMateriel();
+                }
+            } else {
+                // Mode Création (INSERT)
+                const { error } = await supabaseClient.from('materiel').insert([dataObj]);
+                if (error) alert("Erreur lors de l'ajout.");
+                else {
+                    annulerEditionMateriel();
+                    await chargerMateriel();
+                }
+            }
+        }
+
+        // Gère la Suppression définitive (DELETE)
+        async function supprimerMateriel(id, designation) {
+            if (!confirm(`Voulez-vous vraiment supprimer définitivement le matériel suivant :\n"${designation}" ?`)) return;
+
+            const { error } = await supabaseClient.from('materiel').delete().eq('id', id);
+            if (error) {
+                alert("Impossible de supprimer ce matériel. Vérifiez s'il n'est pas associé à un historique.");
+            } else {
                 await chargerMateriel();
             }
         }
