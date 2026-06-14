@@ -1,53 +1,91 @@
-const CACHE_NAME = '2aps-astro-v1';
+const CACHE_NAME = '2aps-astro-v2';
 const urlsToCache = [
   './',
   './index.html',
   './manifest.json'
 ];
 
-// Installation du Service Worker et mise en cache des fichiers de base
+// --- 1. INSTALLATION ---
+// On force le nouveau Service Worker à s'activer sans attendre
 self.addEventListener('install', event => {
+  self.skipWaiting(); 
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Fichiers mis en cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then(cache => {
+      console.log('Mise en cache des fichiers de base');
+      return cache.addAll(urlsToCache);
+    })
   );
 });
 
-// Interception des requêtes réseau
+// --- 2. ACTIVATION ---
+// On nettoie les anciens caches pour éviter d'accumuler les versions obsolètes
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('Suppression de l\'ancien cache :', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim()) // Prend le contrôle immédiat de la page ouverte
+  );
+});
+
+// --- 3. STRATÉGIE DE CACHE (NETWORK FIRST) ---
+// On interroge Internet en priorité. Si le réseau répond, on met à jour le cache.
+// Si on est hors-ligne ou sur le terrain sans réseau, on charge la version du cache.
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then(response => {
-        // On retourne le fichier en cache s'il existe, sinon on fait la requête réseau
-        return response || fetch(event.request);
+        // Si la requête est valide, on clone la réponse pour la mettre en cache
+        if (event.request.method === 'GET') {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseClone);
+          });
+        }
+        return response;
+      })
+      .catch(() => {
+        // En cas de panne de réseau, on bascule sur le cache local
+        return caches.match(event.request);
       })
   );
 });
-// --- GESTION DES NOTIFICATIONS PUSH ---
+
+// --- 4. GESTION DES NOTIFICATIONS PUSH ---
+// Intercepte les signaux Push envoyés par le serveur/Edge Function
 self.addEventListener('push', event => {
   if (event.data) {
-    const data = event.data.json();
-    
-    const options = {
-      body: data.body,
-      icon: './icon-192.png',
-      badge: './icon-192.png',
-      vibrate: [100, 50, 100],
-      data: { url: data.url || './' }
-    };
+    try {
+      const data = event.data.json();
+      
+      const options = {
+        body: data.body,
+        icon: './icon-192.png',
+        badge: './icon-192.png',
+        vibrate: [100, 50, 100],
+        data: { url: data.url || './' }
+      };
 
-    event.waitUntil(
-      self.registration.showNotification(data.title, options)
-    );
+      event.waitUntil(
+        self.registration.showNotification(data.title, options)
+      );
+    } catch (err) {
+      console.error('Erreur lors de la réception du push payload:', err);
+    }
   }
 });
 
-// Action quand l'utilisateur clique sur la notification
+// --- 5. ACTION AU CLIC SUR LA NOTIFICATION ---
+// Redirige l'utilisateur vers l'application lorsqu'il clique sur l'alerte
 self.addEventListener('notificationclick', event => {
-  event.notification.close();
+  event.notification.close(); // Ferme la notification dans la barre du téléphone
+  
   event.waitUntil(
     clients.openWindow(event.notification.data.url)
   );

@@ -1239,11 +1239,21 @@
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
                     .then(registration => {
-                        console.log('Service Worker enregistré avec succès :', registration.scope);
+                        console.log('Service Worker enregistré avec succès.');
                     })
                     .catch(error => {
-                        console.log('Échec de l\'enregistrement du Service Worker :', error);
+                        console.log('Échec de l\'enregistrement :', error);
                     });
+
+                // NOUVEAU : Détecte si un nouveau Service Worker prend le contrôle
+                // et rafraîchit la page automatiquement pour afficher la nouvelle version
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!refreshing) {
+                        window.location.reload();
+                        refreshing = true;
+                    }
+                });
             });
         }
 
