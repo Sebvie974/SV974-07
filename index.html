@@ -114,6 +114,7 @@
             <div>
                 <span id="user-greeting">Connecté</span>
                 <button id="btn-admin-access" class="admin-login-btn" onclick="accederAdmin()" style="display:none;">⚙️ Admin</button>
+                <button id="btn-notifications" onclick="activerNotifications()" style="background: #3498db; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-left: 10px;">🔔 Activer les alertes</button>
             </div>
             <button class="btn-logout" onclick="seDeconnecter()">Déconnexion</button>
         </div>
@@ -1105,6 +1106,70 @@
                         console.log('Échec de l\'enregistrement du Service Worker :', error);
                     });
             });
+        }
+
+        // --- GESTION DES ABONNEMENTS PUSH ---
+        // Remplace cette clé par TA propre Public Key générée
+        const VAPID_PUBLIC_KEY = 'BKMbyFRzqY-uW4Nv1ZI8TyZ3QDbZC2kCA6dPtAVQdB_i8aFH4hAHJ3VymGS2VJry84TimklOQCQZ5lnilleqSWI';
+
+        // Fonction pour convertir la clé VAPID pour le navigateur
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        async function activerNotifications() {
+            if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                return alert("Votre navigateur ne supporte pas les notifications.");
+            }
+
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                return alert("Vous avez refusé les notifications.");
+            }
+
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                let subscription = await registration.pushManager.getSubscription();
+
+                if (!subscription) {
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                    });
+                }
+
+                // On extrait les clés pour les sauvegarder dans Supabase
+                const subJSON = subscription.toJSON();
+                
+                // Vérifier si l'abonnement existe déjà dans la base pour ce membre
+                const { data: existant } = await supabaseClient.from('push_subscriptions')
+                    .select('id').eq('endpoint', subJSON.endpoint).single();
+
+                if (!existant) {
+                    const { error } = await supabaseClient.from('push_subscriptions').insert([{
+                        membre_id: membreConnecte.id,
+                        endpoint: subJSON.endpoint,
+                        p256dh: subJSON.keys.p256dh,
+                        auth: subJSON.keys.auth
+                    }]);
+
+                    if (error) throw error;
+                }
+                
+                alert("Super ! Vous recevrez désormais les alertes pour les soirées et sondages.");
+                document.getElementById('btn-notifications').style.display = 'none'; // On cache le bouton
+                
+            } catch (error) {
+                console.error('Erreur lors de l\'abonnement push:', error);
+                alert("Une erreur est survenue lors de l'activation des notifications.");
+            }
         }
 
         init();
