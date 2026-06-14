@@ -126,11 +126,15 @@
         <div class="tabs">
             <button class="tab-btn active tab-btn-main" onclick="changerOngletPrincipal('vue-soirees', this)">🔭 Soirées</button>
             <button class="tab-btn tab-btn-main" onclick="changerOngletPrincipal('vue-questions', this)">❓ Sondages & Questions</button>
+            <button class="tab-btn tab-btn-main" onclick="changerOngletPrincipal('vue-archives', this)">📂 Archives Soirées</button>
         </div>
 
-        
         <div id="onglet-vue-soirees" class="tab-content tab-content-main active">
             <div id="soirees-container"><p>Chargement des soirées...</p></div>
+        </div>
+
+        <div id="onglet-vue-archives" class="tab-content tab-content-main">
+            <div id="archives-container"><p>Chargement des archives...</p></div>
         </div>
 
         <div id="onglet-vue-questions" class="tab-content tab-content-main">
@@ -590,24 +594,27 @@
 
         async function chargerSoirees() {
             const container = document.getElementById('soirees-container');
+            const archivesContainer = document.getElementById('archives-container'); // Récupération du conteneur d'archives
+            
             const { data: soirees } = await supabaseClient.from('soirees').select('*').order('date', { ascending: true });
             const { data: votes } = await supabaseClient.from('votes').select('*');
             
             if (!soirees) return;
-            if (soirees.length === 0) { container.innerHTML = '<p style="text-align:center; color:#7f8c8d;">Aucune soirée prévue.</p>'; return; }
 
+            // On réinitialise les deux zones d'affichage
             container.innerHTML = ''; 
+            if (archivesContainer) archivesContainer.innerHTML = '';
+
+            let nbSoireesActives = 0;
+            let nbSoireesArchivees = 0;
+
             soirees.forEach(soiree => {
-                // Sécurité de fenêtrage : on remplace le 'T' par un espace si aucun fuseau n'est spécifié.
-                // Cela force la majorité des navigateurs à interpréter la date comme une heure locale.
                 let dateStr = soiree.date;
                 if (!dateStr.includes('Z') && !dateStr.includes('+') && dateStr.includes('T')) {
                     dateStr = dateStr.replace('T', ' ');
                 }
                 
                 const objDate = new Date(dateStr);
-
-                // Options de formatage forçant explicitement le fuseau horaire de La Réunion (GMT+4)
                 const optionsDate = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Indian/Reunion' };
                 const optionsHeure = { hour: '2-digit', minute: '2-digit', timeZone: 'Indian/Reunion' };
                 const affichageDate = objDate.toLocaleDateString('fr-FR', optionsDate) + ' à ' + objDate.toLocaleTimeString('fr-FR', optionsHeure);
@@ -620,10 +627,27 @@
                 let monStatut = '';
                 if (membreConnecte) { const monVote = votesSoiree.find(v => v.membre_id === membreConnecte.id); if (monVote) monStatut = monVote.statut; }
 
+                // --- LOGIQUE DE TEMPS (RÈGLE DES 2 JOURS) ---
+                const maintenant = new Date();
+                const deuxJoursEnMs = 2 * 24 * 60 * 60 * 1000;
+                const depuisCombienDeTemps = maintenant - objDate;
+
+                const estPassee = maintenant > objDate;
+                const estArchivee = estPassee && (depuisCombienDeTemps > deuxJoursEnMs);
+                const estTermineeMaisVisible = estPassee && (depuisCombienDeTemps <= deuxJoursEnMs);
+
+                // Badge "Terminée" pour les soirées de moins de 2 jours
+                let badgeTermineeHtml = '';
+                if (estTermineeMaisVisible) {
+                    badgeTermineeHtml = `<span style="background:#7f8c8d; color:white; padding:3px 8px; border-radius:12px; font-size:12px; margin-left:10px; font-weight:bold;">✓ Terminée</span>`;
+                }
+
+                // Génération de la carte HTML
+                let cardHtml = '';
+
                 if (soiree.annulee) {
                     const motifTexte = soiree.motif_annulation ? `"${soiree.motif_annulation}"` : "Aucun motif précisé.";
-                    
-                    container.innerHTML += `
+                    cardHtml = `
                         <div class="soiree-card" style="opacity: 0.7; border-left-color: #95a5a6;">
                             <h2>${soiree.titre}</h2>
                             <div style="background-color: #f2f4f4; border-left: 4px solid #7f8c8d; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
@@ -644,7 +668,7 @@
                     let btnEditHtml = '';
                     let btnCancelHtml = '';
                     
-                    if (membreConnecte && membreConnecte.role === 'Bureau') {
+                    if (membreConnecte && membreConnecte.role === 'Bureau' && !estPassee) {
                         const descSafe = soiree.description ? soiree.description.replace(/'/g, "\\'") : '';
                         const titreSafe = soiree.titre ? soiree.titre.replace(/'/g, "\\'") : '';
                         const lieuSafe = soiree.lieu ? soiree.lieu.replace(/'/g, "\\'") : '';
@@ -653,26 +677,43 @@
                         btnCancelHtml = `<button class="btn-delete" style="float: right;" onclick="ouvrirModalAnnulationSoiree('${soiree.id}')">🛑 Annuler</button>`;
                     }
 
-                    // Calcul de l'alerte basé sur la date locale bien interprétée
-                    const maintenant = new Date();
-                    maintenant.setHours(0,0,0,0);
-                    const dateSoireePure = new Date(objDate);
-                    dateSoireePure.setHours(0,0,0,0);
-                    
-                    const diffTemps = dateSoireePure.getTime() - maintenant.getTime();
-                    const diffJours = Math.ceil(diffTemps / (1000 * 3600 * 24));
-
+                    // Gestion de la section de vote et d'alerte (désactivées si la soirée est terminée)
                     let alerteHtml = '';
-                    if (diffJours >= 0 && diffJours <= 15) {
-                        let texteJour = diffJours === 0 ? "Aujourd'hui !" : (diffJours === 1 ? "Demain !" : `Dans ${diffJours} jours`);
-                        alerteHtml = `<div style="background-color: #f39c12; color: white; padding: 8px; border-radius: 4px; margin-bottom: 15px; text-align: center; font-weight: bold;">⚠️ Rappel : Cette soirée a lieu ${texteJour}</div>`;
+                    let voteSectionHtml = '';
+
+                    if (estTermineeMaisVisible || estArchivee) {
+                        voteSectionHtml = `<p style="color: #7f8c8d; font-style: italic; font-size: 14px; margin-top: 15px;">La soirée est terminée. Les votes sont clos.</p>`;
+                    } else {
+                        // Calcul de l'alerte des 15 jours (uniquement pour le futur)
+                        const dateSoireePure = new Date(objDate);
+                        dateSoireePure.setHours(0,0,0,0);
+                        const maintenantPure = new Date();
+                        maintenantPure.setHours(0,0,0,0);
+                        const diffJours = Math.ceil((dateSoireePure.getTime() - maintenantPure.getTime()) / (1000 * 3600 * 24));
+
+                        if (diffJours >= 0 && diffJours <= 15) {
+                            let texteJour = diffJours === 0 ? "Aujourd'hui !" : (diffJours === 1 ? "Demain !" : `Dans ${diffJours} jours`);
+                            alerteHtml = `<div style="background-color: #f39c12; color: white; padding: 8px; border-radius: 4px; margin-bottom: 15px; text-align: center; font-weight: bold;">⚠️ Rappel : Cette soirée a lieu ${texteJour}</div>`;
+                        }
+
+                        voteSectionHtml = `
+                            <div class="vote-section">
+                                <select id="statut-select-${soiree.id}">
+                                    <option value="" ${monStatut === '' ? 'selected' : ''} disabled>-- Votre présence --</option>
+                                    <option value="Present" ${monStatut === 'Present' ? 'selected' : ''}>✅ Présent(e)</option>
+                                    <option value="A confirmer" ${monStatut === 'A confirmer' ? 'selected' : ''}>⏳ À confirmer</option>
+                                    <option value="Absent" ${monStatut === 'Absent' ? 'selected' : ''}>❌ Absent(e)</option>
+                                </select>
+                                <button onclick="soumettreVote('${soiree.id}', 'soiree')" style="background-color: #3498db;">${monStatut === '' ? 'Enregistrer' : 'Modifier'} mon vote</button>
+                            </div>
+                        `;
                     }
 
-                    container.innerHTML += `
-                        <div class="soiree-card">
+                    cardHtml = `
+                        <div class="soiree-card" ${estPassee ? 'style="border-left-color: #7f8c8d;"' : ''}>
                             ${btnEditHtml}
                             ${btnCancelHtml}
-                            <h2 style="margin-bottom: 10px;">${soiree.titre}</h2>
+                            <h2 style="margin-bottom: 10px;">${soiree.titre} ${badgeTermineeHtml}</h2>
                             ${alerteHtml}
                             <p><strong>📅 Date et Heure :</strong> ${affichageDate}</p>
                             <p><strong>📍 Lieu :</strong> ${soiree.lieu || 'Non précisé'}</p>
@@ -684,19 +725,30 @@
                                 <span class="stat-badge stat-absent" id="stat-absent-${soiree.id}">❌ Absents: ${nbAbsents}</span>
                             </div>
                             
-                            <div class="vote-section">
-                                <select id="statut-select-${soiree.id}">
-                                    <option value="" ${monStatut === '' ? 'selected' : ''} disabled>-- Votre présence --</option>
-                                    <option value="Present" ${monStatut === 'Present' ? 'selected' : ''}>✅ Présent(e)</option>
-                                    <option value="A confirmer" ${monStatut === 'A confirmer' ? 'selected' : ''}>⏳ À confirmer</option>
-                                    <option value="Absent" ${monStatut === 'Absent' ? 'selected' : ''}>❌ Absent(e)</option>
-                                </select>
-                                <button onclick="soumettreVote('${soiree.id}', 'soiree')" style="background-color: #3498db;">${monStatut === '' ? 'Enregistrer' : 'Modifier'} mon vote</button>
-                            </div>
+                            ${voteSectionHtml}
                         </div>
                     `;
                 }
+
+                // --- DISTRIBUTION DANS LES CONTENEURS ---
+                if (estArchivee || soiree.annulee) {
+                    if (archivesContainer) {
+                        archivesContainer.innerHTML += cardHtml;
+                        nbSoireesArchivees++;
+                    }
+                } else {
+                    container.innerHTML += cardHtml;
+                    nbSoireesActives++;
+                }
             });
+
+            // Petits messages d'absence de contenu pour fignoler l'interface
+            if (nbSoireesActives === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#7f8c8d;">Aucune soirée prévue à l\'ordre du jour.</p>';
+            }
+            if (nbSoireesArchivees === 0 && archivesContainer) {
+                archivesContainer.innerHTML = '<p style="text-align:center; color:#7f8c8d;">Le tiroir des archives est vide.</p>';
+            }
         }
 
         // --- NOUVEAU : Ouverture / Fermeture de la modale sondage ---
