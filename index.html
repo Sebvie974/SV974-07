@@ -995,6 +995,7 @@
 
         // --- REALTIME ---
         function ecouterRealtime() {
+            // Écoute des votes (Soirées)
             supabaseClient.channel('public:votes').on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, async () => {
                 const { data: votes } = await supabaseClient.from('votes').select('*');
                 document.querySelectorAll('[id^="stat-present-"]').forEach(el => {
@@ -1007,6 +1008,7 @@
                 if (modaleDetailsOuverteId && modaleDetailsType === 'soiree') afficherDetailsVotes(modaleDetailsOuverteId, 'soiree');
             }).subscribe();
 
+            // Écoute des réponses (Sondages)
             supabaseClient.channel('public:reponses').on('postgres_changes', { event: '*', schema: 'public', table: 'reponses' }, async () => {
                 const { data: reponses } = await supabaseClient.from('reponses').select('*');
                 document.querySelectorAll('[id^="stat-pour-"]').forEach(el => {
@@ -1017,6 +1019,32 @@
                     document.getElementById(`stat-abstention-${qId}`).innerText = `🤷 Abstention: ${rQuest.filter(r => r.choix === 'Abstention').length}`;
                 });
                 if (modaleDetailsOuverteId && modaleDetailsType === 'question') afficherDetailsVotes(modaleDetailsOuverteId, 'question');
+            }).subscribe();
+
+            // NOUVEAU : Écoute de la table Membres (Mise à jour automatique du tableau Admin)
+            supabaseClient.channel('public:membres').on('postgres_changes', { event: '*', schema: 'public', table: 'membres' }, async () => {
+                await chargerMembres();
+                // Si la fenêtre d'administration est ouverte, on la rafraîchit visuellement
+                if (document.getElementById('admin-modal').style.display === 'block') {
+                    afficherTableauMembres();
+                }
+            }).subscribe();
+
+            // NOUVEAU : Écoute des Demandes d'accès (Rafraîchissement + Notification locale)
+            supabaseClient.channel('public:demandes').on('postgres_changes', { event: '*', schema: 'public', table: 'demandes_acces' }, async (payload) => {
+                if (membreConnecte && membreConnecte.role === 'Bureau') {
+                    await chargerDemandesAcces();
+                    
+                    // Si c'est une toute nouvelle demande (INSERT) et que l'app est ouverte
+                    if (payload.eventType === 'INSERT') {
+                        if ('Notification' in window && Notification.permission === 'granted') {
+                            new Notification("📝 Nouvelle demande d'accès", {
+                                body: `${payload.new.prenom} ${payload.new.nom} souhaite rejoindre le club.`,
+                                icon: './icon-192.png'
+                            });
+                        }
+                    }
+                }
             }).subscribe();
         }
 
