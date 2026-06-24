@@ -161,7 +161,9 @@
             
             <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; flex: 1;">
                 <button id="btn-admin-access" class="admin-login-btn" onclick="accederAdmin()" style="display:none; margin: 0;">⚙️ Admin</button>
-                <button id="btn-notifications" onclick="basculerNotifications()" style="background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin: 0;">🔔 Activer les alertes</button>
+                <button id="btn-notifications" onclick="ouvrirModalNotifs()" style="background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin: 0;">
+                    🔔 Mes alertes
+                </button>
                 <button id="btn-logs" onclick="ouvrirModalLogs()" style="background: #7f8c8d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin: 0;">📜 Registre (Logs)</button>
                 <button class="btn-logout" onclick="seDeconnecter()" style="margin: 0;">Déconnexion</button>
             </div>
@@ -389,6 +391,32 @@
         </div>
     </div>
 
+    <div id="modal-notifs" class="modal-overlay">
+        <div class="modal-content" style="max-width: 450px;">
+            <span class="close-btn" onclick="fermerModalNotifs()">&times;</span>
+            <h2 style="color: #34495e; margin-top: 0;">🔔 Préférences d'alertes</h2>
+            <p style="font-size: 14px; color: #7f8c8d; margin-bottom: 20px;">
+                Choisissez comment vous souhaitez être informé des nouvelles soirées et des nouveaux sondages.
+            </p>
+            
+            <div class="form-section" style="background: transparent; padding: 0;">
+                <label style="display: flex; align-items: center; gap: 10px; font-size: 16px; margin-bottom: 15px; cursor: pointer; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #ddd;">
+                    <input type="checkbox" id="check-notif-push" style="width: 20px; height: 20px; margin: 0;">
+                    📱 Notifications sur cet appareil (Push)
+                </label>
+                
+                <label style="display: flex; align-items: center; gap: 10px; font-size: 16px; margin-bottom: 20px; cursor: pointer; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #ddd;">
+                    <input type="checkbox" id="check-notif-mail" style="width: 20px; height: 20px; margin: 0;">
+                    ✉️ Recevoir un E-mail
+                </label>
+                
+                <button class="btn-creer" style="background-color: #3498db;" onclick="sauvegarderPreferencesNotifs()">
+                    Enregistrer mes préférences
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SUPABASE_URL = 'https://zwbwkhqyjeeykixtpldi.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_RdxzQzvTpjj8nS1B2hDpmw_w4GH_9UC';
@@ -506,7 +534,6 @@
             await chargerMateriel();
             ecouterRealtime();
 
-            verifierStatutNotifications();
         }
 
         function accederAdmin() { 
@@ -1135,77 +1162,79 @@
             return outputArray;
         }
 
-        // Vérifie l'état actuel pour afficher le bon bouton au démarrage
-        async function verifierStatutNotifications() {
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        async function ouvrirModalNotifs() {
+            // On récupère les préférences actuelles du membre depuis Supabase
+            const { data: membreData } = await supabaseClient.from('membres').select('notif_push, notif_mail').eq('id', membreConnecte.id).single();
             
-            const registration = await navigator.serviceWorker.ready;
-            const subscription = await registration.pushManager.getSubscription();
-            const btn = document.getElementById('btn-notifications');
-            
-            if (subscription) {
-                btn.innerHTML = '🔕 Désactiver les alertes';
-                btn.style.backgroundColor = '#e74c3c'; // Rouge
-            } else {
-                btn.innerHTML = '🔔 Activer les alertes';
-                btn.style.backgroundColor = '#3498db'; // Bleu
+            if (membreData) {
+                document.getElementById('check-notif-push').checked = membreData.notif_push;
+                document.getElementById('check-notif-mail').checked = membreData.notif_mail;
             }
+            document.getElementById('modal-notifs').style.display = 'block';
         }
 
-        // Action lors du clic sur le bouton
-        async function basculerNotifications() {
-            if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-                return alert("Votre navigateur ne supporte pas les notifications.");
-            }
+        function fermerModalNotifs() {
+            document.getElementById('modal-notifs').style.display = 'none';
+        }
 
-            const registration = await navigator.serviceWorker.ready;
-            let subscription = await registration.pushManager.getSubscription();
+        async function sauvegarderPreferencesNotifs() {
+            const veutPush = document.getElementById('check-notif-push').checked;
+            const veutMail = document.getElementById('check-notif-mail').checked;
 
-            // CAS 1 : L'utilisateur est DÉJÀ abonné -> On le désabonne
-            if (subscription) {
-                const subJSON = subscription.toJSON();
-                
-                // 1. On le supprime de la base de données Supabase
-                await supabaseClient.from('push_subscriptions').delete().eq('endpoint', subJSON.endpoint);
-                
-                // 2. On désactive l'abonnement dans son navigateur
-                await subscription.unsubscribe();
-                
-                alert("🔕 Alertes désactivées. Vous ne recevrez plus de notifications.");
-                verifierStatutNotifications(); // Met à jour l'aspect du bouton
-            } 
-            // CAS 2 : L'utilisateur N'EST PAS abonné -> On l'abonne
-            else {
+            // 1. GESTION DU PUSH TECHNIQUE SUR L'APPAREIL
+            if (veutPush) {
+                if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                    document.getElementById('check-notif-push').checked = false;
+                    return alert("Votre navigateur ne supporte pas les notifications Push.");
+                }
                 const permission = await Notification.requestPermission();
-                if (permission !== 'granted') return alert("Vous avez refusé les notifications dans votre navigateur.");
-
+                if (permission !== 'granted') {
+                    document.getElementById('check-notif-push').checked = false;
+                    return alert("Vous devez autoriser les notifications dans les paramètres de votre navigateur.");
+                }
+                
                 try {
-                    subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-                    });
-
+                    const registration = await navigator.serviceWorker.ready;
+                    let subscription = await registration.pushManager.getSubscription();
+                    if (!subscription) {
+                        subscription = await registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                        });
+                    }
                     const subJSON = subscription.toJSON();
-                    
-                    const { data: existant } = await supabaseClient.from('push_subscriptions')
-                        .select('id').eq('endpoint', subJSON.endpoint).single();
-
+                    const { data: existant } = await supabaseClient.from('push_subscriptions').select('id').eq('endpoint', subJSON.endpoint).single();
                     if (!existant) {
                         await supabaseClient.from('push_subscriptions').insert([{
-                            membre_id: membreConnecte.id,
-                            endpoint: subJSON.endpoint,
-                            p256dh: subJSON.keys.p256dh,
-                            auth: subJSON.keys.auth
+                            membre_id: membreConnecte.id, endpoint: subJSON.endpoint, p256dh: subJSON.keys.p256dh, auth: subJSON.keys.auth
                         }]);
                     }
-                    
-                    alert("🔔 Alertes activées avec succès !");
-                    verifierStatutNotifications(); // Met à jour l'aspect du bouton
-                    
                 } catch (error) {
-                    console.error('Erreur push:', error);
-                    alert("Une erreur est survenue lors de l'activation.");
+                    console.error("Erreur Push:", error);
+                    return alert("Erreur lors de l'activation du Push.");
                 }
+            } else {
+                // Si l'utilisateur décoche le Push, on le désabonne localement
+                if ('serviceWorker' in navigator) {
+                    const registration = await navigator.serviceWorker.ready;
+                    const subscription = await registration.pushManager.getSubscription();
+                    if (subscription) {
+                        await supabaseClient.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);
+                        await subscription.unsubscribe();
+                    }
+                }
+            }
+
+            // 2. SAUVEGARDE DES PRÉFÉRENCES DANS LA FICHE MEMBRE
+            const { error } = await supabaseClient.from('membres')
+                .update({ notif_push: veutPush, notif_mail: veutMail })
+                .eq('id', membreConnecte.id);
+
+            if (error) {
+                alert("Erreur lors de la sauvegarde.");
+            } else {
+                alert("Préférences d'alertes mises à jour avec succès !");
+                fermerModalNotifs();
             }
         }
 
