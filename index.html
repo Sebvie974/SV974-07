@@ -106,7 +106,15 @@
     <div id="login-screen">
         <h2>Connexion Membre</h2>
         <input type="email" id="login-email" placeholder="Votre E-mail">
-        <input type="password" id="login-mdp" placeholder="Votre Mot de passe">
+        
+        <div style="text-align: left;">
+            <input type="password" id="login-mdp" placeholder="Votre Mot de passe" style="margin-bottom: 5px; width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+            <label style="font-size: 13px; color: #7f8c8d; display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 15px;">
+                <input type="checkbox" onclick="basculerAffichageMdp('login-mdp')" style="width: auto; margin: 0;">
+                Afficher le mot de passe
+            </label>
+        </div>
+
         <button class="btn-creer" onclick="seConnecter()">Se connecter</button>
         <button type="button" onclick="ouvrirModalDemande()" style="background-color: transparent; color: #34495e; border: 1px solid #34495e; margin-top: 10px; width: 100%; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">
             📝 Demander un accès au club
@@ -131,8 +139,16 @@
             <input type="email" id="fin-email" class="full-width" disabled style="background: #f2f4f4; margin-bottom: 15px;">
             
             <label style="font-size: 14px; color: #34495e; font-weight: bold;">Choisissez un mot de passe :</label>
-            <input type="password" id="fin-password" class="full-width" placeholder="Minimum 6 caractères" style="margin-bottom: 20px;">
-            
+            <label style="font-size: 14px; color: #34495e; font-weight: bold;">Choisissez un mot de passe :</label>
+            <div style="text-align: left;">
+                <input type="password" id="fin-password" class="full-width" placeholder="Nouveau mot de passe (6 car. min)" style="margin-bottom: 5px;">
+                <input type="password" id="fin-password-confirm" class="full-width" placeholder="Confirmez le mot de passe" style="margin-bottom: 5px;">
+                <label style="font-size: 13px; color: #7f8c8d; display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 20px;">
+                    <input type="checkbox" onclick="basculerAffichageMdp('fin-password', 'fin-password-confirm')" style="width: auto; margin: 0;">
+                    Afficher les mots de passe
+                </label>
+            </div>
+                        
             <button class="btn-creer" style="background-color: #27ae60;" onclick="soumettreFinalisationCompte()">
                 Activer mon compte et me connecter
             </button>
@@ -140,13 +156,15 @@
     </div>
 
     <div id="main-app">
-        <div class="user-header">
-            <div>
-                <span id="user-greeting">Connecté</span>
-                <button id="btn-admin-access" class="admin-login-btn" onclick="accederAdmin()" style="display:none;">⚙️ Admin</button>
-                <button id="btn-notifications" onclick="activerNotifications()" style="background: #3498db; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-left: 10px;">🔔 Activer les alertes</button>
+        <div class="user-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 15px;">
+            <span id="user-greeting" style="font-size: 15px;">Connecté</span>
+            
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; flex: 1;">
+                <button id="btn-admin-access" class="admin-login-btn" onclick="accederAdmin()" style="display:none; margin: 0;">⚙️ Admin</button>
+                <button id="btn-notifications" onclick="basculerNotifications()" style="background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin: 0;">🔔 Activer les alertes</button>
+                <button id="btn-logs" onclick="ouvrirModalLogs()" style="background: #7f8c8d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin: 0;">📜 Registre (Logs)</button>
+                <button class="btn-logout" onclick="seDeconnecter()" style="margin: 0;">Déconnexion</button>
             </div>
-            <button class="btn-logout" onclick="seDeconnecter()">Déconnexion</button>
         </div>
 
         <div id="sondages-banner-container"></div>
@@ -357,6 +375,20 @@
         </div>
     </div>
 
+    <div id="modal-logs" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close-btn" onclick="fermerModalLogs()">&times;</span>
+            <h2 style="color: #34495e; margin-top: 0;">📜 Registre de transparence</h2>
+            <p style="font-size: 14px; color: #7f8c8d; margin-bottom: 15px;">
+                Historique des actions administratives majeures du club.
+            </p>
+            
+            <div id="logs-container" style="max-height: 400px; overflow-y: auto; background: #f2f4f4; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
+                <p>Chargement du registre...</p>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SUPABASE_URL = 'https://zwbwkhqyjeeykixtpldi.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_RdxzQzvTpjj8nS1B2hDpmw_w4GH_9UC';
@@ -473,6 +505,8 @@
             await chargerQuestions();
             await chargerMateriel();
             ecouterRealtime();
+
+            verifierStatutNotifications();
         }
 
         function accederAdmin() { 
@@ -590,14 +624,36 @@
             if (!error) { await chargerMembres(); afficherTableauMembres(); }
         }
 
-        async function supprimerMembre(id, nomComplet) {
-            if (!confirm(`⚠️ Voulez-vous vraiment supprimer DÉFINITIVEMENT le membre "${nomComplet}" ?`)) return;
-            const { error } = await supabaseClient.from('membres').delete().eq('id', id);
-            if (!error) {
-                await chargerMembres(); afficherTableauMembres();
-                if (membreConnecte && membreConnecte.id === id) seDeconnecter();
-            }
-        }
+        async function supprimerMembre(id, prenom, nom) {
+    // 1. Demande de justification obligatoire
+    const justification = prompt(`⚠️ Vous êtes sur le point de supprimer ${prenom} ${nom}.\n\nVeuillez obligatoirement justifier cette suppression (ex: "Non paiement cotisation", "Départ", etc.) :`);
+    
+    if (justification === null) return; // L'utilisateur a cliqué sur "Annuler"
+    if (justification.trim() === "") {
+        alert("Action annulée : La justification est obligatoire pour supprimer un membre.");
+        return;
+    }
+
+    // 2. Suppression dans la table membres
+    const { error: deleteError } = await supabaseClient.from('membres').delete().eq('id', id);
+    
+    if (deleteError) {
+        console.error(deleteError);
+        return alert("Erreur lors de la suppression du membre.");
+    }
+
+    // 3. Inscription dans l'historique
+    await supabaseClient.from('historique_actions').insert([{
+        acteur: `${membreConnecte.prenom} ${membreConnecte.nom}`,
+        type_action: 'SUPPRESSION_MEMBRE',
+        details: `Suppression du compte de ${prenom} ${nom}`,
+        justification: justification.trim()
+    }]);
+
+    alert("Le membre a bien été supprimé.");
+    // Si tu as gardé le Realtime de la réponse précédente, le tableau se mettra à jour tout seul.
+    // Sinon, appelle afficherTableauMembres() ici.
+}
 
         // --- GESTION DES SOIRÉES ---
         function preparerEditionSoiree(id, titre, date, lieu, description) {
@@ -635,6 +691,15 @@
                 lieu: document.getElementById('new-soiree-lieu').value.trim(), 
                 description: document.getElementById('new-soiree-desc').value.trim() 
             };
+            
+            // Inscription dans l'historique (à placer dans le bloc de succès)
+            await supabaseClient.from('historique_actions').insert([{
+             acteur: `${membreConnecte.prenom} ${membreConnecte.nom}`,
+            type_action: 'AJOUT_SOIREE',
+            details: `Création de l'événement : ${titreDeLaSoiree} (prévu le ${dateDeLaSoiree})`,
+            justification: 'N/A'
+            }]);
+
             if (soireeEditionId) {
                 const { error } = await supabaseClient.from('soirees').update(dataObj).eq('id', soireeEditionId);
                 if (!error) { alert("Mise à jour réussie !"); annulerEditionSoiree(); fermerAdmin(); }
@@ -1070,22 +1135,78 @@
             return outputArray;
         }
 
-        async function activerNotifications() {
-            if (!('Notification' in window) || !('serviceWorker' in navigator)) return alert("Non supporté.");
-            const permission = await Notification.requestPermission();
-            if (permission !== 'granted') return alert("Notifications refusées.");
-            try {
-                const registration = await navigator.serviceWorker.ready;
-                let subscription = await registration.pushManager.getSubscription();
-                if (!subscription) subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) });
+        // Vérifie l'état actuel pour afficher le bon bouton au démarrage
+        async function verifierStatutNotifications() {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+            
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.getSubscription();
+            const btn = document.getElementById('btn-notifications');
+            
+            if (subscription) {
+                btn.innerHTML = '🔕 Désactiver les alertes';
+                btn.style.backgroundColor = '#e74c3c'; // Rouge
+            } else {
+                btn.innerHTML = '🔔 Activer les alertes';
+                btn.style.backgroundColor = '#3498db'; // Bleu
+            }
+        }
+
+        // Action lors du clic sur le bouton
+        async function basculerNotifications() {
+            if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                return alert("Votre navigateur ne supporte pas les notifications.");
+            }
+
+            const registration = await navigator.serviceWorker.ready;
+            let subscription = await registration.pushManager.getSubscription();
+
+            // CAS 1 : L'utilisateur est DÉJÀ abonné -> On le désabonne
+            if (subscription) {
                 const subJSON = subscription.toJSON();
-                const { data: existant } = await supabaseClient.from('push_subscriptions').select('id').eq('endpoint', subJSON.endpoint).single();
-                if (!existant) {
-                    const { error } = await supabaseClient.from('push_subscriptions').insert([{ membre_id: membreConnecte.id, endpoint: subJSON.endpoint, p256dh: subJSON.keys.p256dh, auth: subJSON.keys.auth }]);
-                    if (error) throw error;
+                
+                // 1. On le supprime de la base de données Supabase
+                await supabaseClient.from('push_subscriptions').delete().eq('endpoint', subJSON.endpoint);
+                
+                // 2. On désactive l'abonnement dans son navigateur
+                await subscription.unsubscribe();
+                
+                alert("🔕 Alertes désactivées. Vous ne recevrez plus de notifications.");
+                verifierStatutNotifications(); // Met à jour l'aspect du bouton
+            } 
+            // CAS 2 : L'utilisateur N'EST PAS abonné -> On l'abonne
+            else {
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') return alert("Vous avez refusé les notifications dans votre navigateur.");
+
+                try {
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                    });
+
+                    const subJSON = subscription.toJSON();
+                    
+                    const { data: existant } = await supabaseClient.from('push_subscriptions')
+                        .select('id').eq('endpoint', subJSON.endpoint).single();
+
+                    if (!existant) {
+                        await supabaseClient.from('push_subscriptions').insert([{
+                            membre_id: membreConnecte.id,
+                            endpoint: subJSON.endpoint,
+                            p256dh: subJSON.keys.p256dh,
+                            auth: subJSON.keys.auth
+                        }]);
+                    }
+                    
+                    alert("🔔 Alertes activées avec succès !");
+                    verifierStatutNotifications(); // Met à jour l'aspect du bouton
+                    
+                } catch (error) {
+                    console.error('Erreur push:', error);
+                    alert("Une erreur est survenue lors de l'activation.");
                 }
-                alert("Alertes activées !"); document.getElementById('btn-notifications').style.display = 'none'; 
-            } catch (error) { alert("Erreur d'activation."); }
+            }
         }
 
         // --- MATÉRIEL ---
@@ -1264,10 +1385,12 @@
             }
         }
 
-        async function soumettreFinalisationCompte() {
-            const password = document.getElementById('fin-password').value.trim();
-            if (!password || password.length < 6) return alert("Le mot de passe doit contenir au moins 6 caractères.");
+                async function soumettreFinalisationCompte() {
+                const password = document.getElementById('fin-password').value.trim();
+                const confirmPassword = document.getElementById('fin-password-confirm').value.trim();
 
+                if (!password || password.length < 6) return alert("Le mot de passe doit contenir au moins 6 caractères.");
+                if (password !== confirmPassword) return alert("Les deux mots de passe ne correspondent pas. Veuillez vérifier votre saisie.");
             // 1. On hache le mot de passe de la même façon que dans le reste de l'application
             const mdpHache = await hacherMotDePasse(password);
 
@@ -1298,6 +1421,64 @@
             
             // On nettoie l'adresse internet et on relance la page
             window.location.href = window.location.pathname;
+        }
+
+        function basculerAffichageMdp(...ids) {
+    ids.forEach(id => {
+        const champ = document.getElementById(id);
+        if (champ) {
+            champ.type = champ.type === "password" ? "text" : "password";
+        }
+    });
+}
+
+        function basculerAffichageMdp(...ids) {
+            ids.forEach(id => {
+                const champ = document.getElementById(id);
+                if (champ) {
+                    champ.type = champ.type === "password" ? "text" : "password";
+                }
+            });
+        }
+
+        // --- GESTION DU REGISTRE DES ACTIONS (LOGS) ---
+        function ouvrirModalLogs() {
+            document.getElementById('modal-logs').style.display = 'block';
+            chargerLogs();
+        }
+
+        function fermerModalLogs() {
+            document.getElementById('modal-logs').style.display = 'none';
+        }
+
+        async function chargerLogs() {
+            const container = document.getElementById('logs-container');
+            container.innerHTML = '<p>Chargement en cours...</p>';
+
+            const { data: logs, error } = await supabaseClient.from('historique_actions').select('*').order('date_action', { ascending: false });
+
+            if (error || !logs || logs.length === 0) {
+                container.innerHTML = '<p style="color:#7f8c8d; font-style:italic; text-align:center;">Le registre est vide pour le moment.</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            logs.forEach(log => {
+                const dateObj = new Date(log.date_action);
+                const dateFr = dateObj.toLocaleDateString('fr-FR') + ' à ' + dateObj.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
+                
+                // Formater le type d'action pour que ce soit joli
+                let titreAction = log.type_action.replace(/_/g, ' ');
+
+                container.innerHTML += `
+                    <div style="border-left: 4px solid #34495e; padding: 12px; margin-bottom: 12px; background: white; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                        <div style="font-size: 12px; color: #7f8c8d; margin-bottom: 5px;">📅 ${dateFr} | 👤 <strong>${log.acteur}</strong></div>
+                        <div style="font-size: 14px; color: #2c3e50; font-weight: bold;">${titreAction}</div>
+                        <div style="font-size: 14px; margin-top: 5px; color: #34495e;">${log.details}</div>
+                        ${log.justification && log.justification !== 'N/A' ? `<div style="font-size: 13px; margin-top: 8px; color: #e74c3c; background: #fce4e4; padding: 5px; border-radius: 3px;"><em>Motif : "${log.justification}"</em></div>` : ''}
+                    </div>
+                `;
+            });
         }
 
         // --- DÉMARRAGE DE L'APP ---
