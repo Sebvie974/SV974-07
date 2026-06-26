@@ -463,26 +463,31 @@
         // --- CONNEXION ---
         async function seConnecter() {
             const email = document.getElementById('login-email').value.trim();
-            const mdpClair = document.getElementById('login-mdp').value.trim();
+            const password = document.getElementById('login-mdp').value.trim();
 
-            if (!email || !mdpClair) return alert("Veuillez remplir tous les champs.");
+            if (!email || !password) return alert("Veuillez remplir tous les champs.");
 
-            const mdpHache = await hacherMotDePasse(mdpClair);
-            const { data, error } = await supabaseClient.from('membres').select('*').eq('email', email).eq('mot_de_passe', mdpHache).single();
+            // 1. On interroge le moteur de sécurité Supabase
+            const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
 
-            if (error || !data) {
-                alert("E-mail ou mot de passe incorrect.");
-            } else if (data.actif === false) {
-                alert("Votre compte a été désactivé.");
+            if (authError) return alert("E-mail ou mot de passe incorrect.");
+
+            // 2. Si le mot de passe est bon, on récupère sa fiche dans ta table
+            const { data: membreData, error: membreError } = await supabaseClient.from('membres')
+                .select('*')
+                .eq('id', authData.user.id)
+                .single();
+
+            if (!membreData || membreData.actif === false) {
+                alert("Votre compte a été désactivé par le Bureau.");
+                await supabaseClient.auth.signOut(); // On referme la porte
             } else {
-                membreConnecte = data; 
-                if (data.premiere_connexion) {
-                    document.getElementById('login-screen').style.display = 'none';
-                    document.getElementById('force-mdp-screen').style.display = 'block';
-                } else {
-                    localStorage.setItem('astroUser', JSON.stringify(data)); 
-                    afficherApp();
-                }
+                membreConnecte = membreData;
+                localStorage.setItem('astroUser', JSON.stringify(membreData));
+                afficherApp();
             }
         }
 
@@ -508,6 +513,7 @@
         }
 
         async function seDeconnecter() {
+            await supabaseClient.auth.signOut(); // Déconnexion officielle du moteur de sécurité
             membreConnecte = null;
             localStorage.removeItem('astroUser');
             document.getElementById('login-screen').style.display = 'block';
@@ -1415,40 +1421,38 @@
         }
 
                 async function soumettreFinalisationCompte() {
-                const password = document.getElementById('fin-password').value.trim();
-                const confirmPassword = document.getElementById('fin-password-confirm').value.trim();
+            const password = document.getElementById('fin-password').value.trim();
+            const confirmPassword = document.getElementById('fin-password-confirm').value.trim();
 
-                if (!password || password.length < 6) return alert("Le mot de passe doit contenir au moins 6 caractères.");
-                if (password !== confirmPassword) return alert("Les deux mots de passe ne correspondent pas. Veuillez vérifier votre saisie.");
-            // 1. On hache le mot de passe de la même façon que dans le reste de l'application
-            const mdpHache = await hacherMotDePasse(password);
+            if (!password || password.length < 6) return alert("Le mot de passe doit contenir au moins 6 caractères.");
+            if (password !== confirmPassword) return alert("Les mots de passe ne correspondent pas.");
 
-            // 2. On insère directement la fiche dans la table officielle 'membres'
+            // 1. Inscription dans le coffre-fort officiel Supabase Auth
+            const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+                email: donneesFuturMembre.email,
+                password: password
+            });
+
+            if (authError) return alert(`Erreur système : ${authError.message}`);
+
+            // 2. Insertion dans TA table 'membres' en utilisant l'ID sécurisé fourni par Supabase
             const { error: profilError } = await supabaseClient.from('membres').insert([{
+                id: authData.user.id, 
                 prenom: donneesFuturMembre.prenom,
                 nom: donneesFuturMembre.nom,
                 email: donneesFuturMembre.email,
                 telephone: donneesFuturMembre.telephone,
                 region: donneesFuturMembre.region,
-                mot_de_passe: mdpHache, // On insère bien le mot de passe haché !
                 role: 'Membre',
-                actif: true,
-                premiere_connexion: false // Le membre vient de choisir son mot de passe, pas besoin de le forcer plus tard
+                actif: true
             }]);
 
-            if (profilError) {
-                console.error(profilError);
-                return alert("Erreur lors de la création de la fiche membre.");
-            }
+            if (profilError) return alert("Erreur lors de la création de la fiche membre.");
 
-            // 3. On grille le jeton d'invitation pour qu'il ne soit plus réutilisable
-            await supabaseClient.from('demandes_acces')
-                .update({ statut: 'compte_cree' })
-                .eq('id', donneesFuturMembre.id);
+            // 3. Clôture de la demande
+            await supabaseClient.from('demandes_acces').update({ statut: 'compte_cree' }).eq('id', donneesFuturMembre.id);
 
-            alert("Compte activé avec succès ! Vous pouvez maintenant vous connecter sur la page d'accueil.");
-            
-            // On nettoie l'adresse internet et on relance la page
+            alert("Compte activé avec succès ! Vous pouvez maintenant vous connecter.");
             window.location.href = window.location.pathname;
         }
 
