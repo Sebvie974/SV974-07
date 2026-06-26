@@ -724,54 +724,93 @@
         }
 
         async function ajouterSoiree() {
-            // 1. Récupération des valeurs avec tes identifiants exacts !
+            // 1. Récupération des valeurs dans tes cases habituelles
             const titre = document.getElementById('new-soiree-titre').value.trim(); 
-            const date = document.getElementById('new-soiree-date').value;
+            const dateSaisie = document.getElementById('new-soiree-date').value;
             const lieu = document.getElementById('new-soiree-lieu').value.trim();
             const description = document.getElementById('new-soiree-desc').value.trim();
 
-            // Vérification de base
-            if (!titre || !date) {
+            if (!titre || !dateSaisie) {
                 return alert("Veuillez au moins remplir le titre et la date de la soirée.");
             }
 
-            try {
-                // 2. Insertion de la soirée dans Supabase
-                const { error: soireeError } = await supabaseClient.from('soirees').insert([{
-                    titre: titre,
-                    date: date,
-                    lieu: lieu,
-                    description: description // Prise en compte de ton champ description
-                }]);
+            // --- LA CORRECTION DU FUSEAU HORAIRE (GMT+4) ---
+            const dateReunion = dateSaisie + ":00+04:00";
 
-                if (soireeError) {
-                    console.error("Erreur Supabase :", soireeError);
-                    return alert("Erreur lors de l'enregistrement de la soirée.");
+            try {
+                // 2. L'AIGUILLAGE : Création ou Modification ?
+                if (typeof soireeEditionId !== 'undefined' && soireeEditionId !== null && soireeEditionId !== '') {
+                    
+                    // ==========================================
+                    // MODE MODIFICATION (UPDATE)
+                    // ==========================================
+                    const { error: updateError } = await supabaseClient.from('soirees')
+                        .update({
+                            titre: titre,
+                            date: dateReunion,
+                            lieu: lieu,
+                            description: description
+                        })
+                        .eq('id', soireeEditionId); // On cible la bonne soirée !
+
+                    if (updateError) return alert("Erreur lors de la modification.");
+
+                    // Historique
+                    await supabaseClient.from('historique_actions').insert([{
+                        acteur: `${membreConnecte.prenom} ${membreConnecte.nom}`,
+                        type_action: 'MODIFICATION_SOIREE',
+                        details: `Mise à jour de la soirée : ${titre}`,
+                        justification: 'Modification par le Bureau'
+                    }]);
+
+                    alert("Soirée modifiée avec succès !");
+
+                } else {
+
+                    // ==========================================
+                    // MODE CRÉATION (INSERT)
+                    // ==========================================
+                    const { error: insertError } = await supabaseClient.from('soirees')
+                        .insert([{
+                            titre: titre,
+                            date: dateReunion,
+                            lieu: lieu,
+                            description: description
+                        }]);
+
+                    if (insertError) return alert("Erreur lors de l'enregistrement.");
+
+                    // Historique
+                    await supabaseClient.from('historique_actions').insert([{
+                        acteur: `${membreConnecte.prenom} ${membreConnecte.nom}`,
+                        type_action: 'AJOUT_SOIREE',
+                        details: `Création de l'événement : ${titre}`,
+                        justification: 'N/A'
+                    }]);
+
+                    alert("Soirée programmée avec succès !");
                 }
 
-                // 3. Inscription dans le registre de transparence
-                await supabaseClient.from('historique_actions').insert([{
-                    acteur: `${membreConnecte.prenom} ${membreConnecte.nom}`,
-                    type_action: 'AJOUT_SOIREE',
-                    details: `Création de l'événement : ${titre} (prévu le ${date})`,
-                    justification: 'N/A'
-                }]);
-
-                // 4. Succès et nettoyage de l'interface
-                alert("Soirée programmée avec succès !");
-                
-                // On vide tes champs pour la prochaine fois
+                // 3. NETTOYAGE (Très important pour ne pas rester bloqué en mode édition)
                 document.getElementById('new-soiree-titre').value = '';
                 document.getElementById('new-soiree-date').value = '';
                 document.getElementById('new-soiree-lieu').value = '';
                 document.getElementById('new-soiree-desc').value = '';
                 
-                // Fermeture de la modale d'administration (Vérifie juste que ta modale s'appelle bien 'admin-modal')
+                // On remet le bouton dans son état normal (Couleur bleue et texte de base)
+                document.getElementById('btn-save-soiree').innerText = "Programmer"; 
+                document.getElementById('btn-save-soiree').style.backgroundColor = "#3498db";
+                document.getElementById('btn-cancel-soiree-edit').style.display = "none";
+                
+                // ON VIDE LA MÉMOIRE DE L'ID POUR LA PROCHAINE FOIS !
+                soireeEditionId = null; 
+
+                // Fermeture de la modale
                 document.getElementById('admin-modal').style.display = 'none';
 
             } catch (error) {
                 console.error("Erreur inattendue :", error);
-                alert("Une erreur technique a bloqué la création de la soirée.");
+                alert("Une erreur technique a bloqué l'action.");
             }
         }
 
