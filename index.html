@@ -724,10 +724,11 @@
         }
 
         async function ajouterSoiree() {
-            // 1. Récupération des valeurs (⚠️ Vérifie que ces ID correspondent bien à ton fichier HTML)
-            const titre = document.getElementById('soiree-titre').value.trim(); 
-            const date = document.getElementById('soiree-date').value;
-            const lieu = document.getElementById('soiree-lieu').value.trim();
+            // 1. Récupération des valeurs avec tes identifiants exacts !
+            const titre = document.getElementById('new-soiree-titre').value.trim(); 
+            const date = document.getElementById('new-soiree-date').value;
+            const lieu = document.getElementById('new-soiree-lieu').value.trim();
+            const description = document.getElementById('new-soiree-desc').value.trim();
 
             // Vérification de base
             if (!titre || !date) {
@@ -739,7 +740,8 @@
                 const { error: soireeError } = await supabaseClient.from('soirees').insert([{
                     titre: titre,
                     date_soiree: date,
-                    lieu: lieu
+                    lieu: lieu,
+                    description: description // Prise en compte de ton champ description
                 }]);
 
                 if (soireeError) {
@@ -747,7 +749,7 @@
                     return alert("Erreur lors de l'enregistrement de la soirée.");
                 }
 
-                // 3. Inscription dans le registre de transparence (avec les BONS noms de variables)
+                // 3. Inscription dans le registre de transparence
                 await supabaseClient.from('historique_actions').insert([{
                     acteur: `${membreConnecte.prenom} ${membreConnecte.nom}`,
                     type_action: 'AJOUT_SOIREE',
@@ -758,17 +760,14 @@
                 // 4. Succès et nettoyage de l'interface
                 alert("Soirée programmée avec succès !");
                 
-                // On vide les champs pour la prochaine fois
-                document.getElementById('soiree-titre').value = '';
-                document.getElementById('soiree-date').value = '';
-                document.getElementById('soiree-lieu').value = '';
+                // On vide tes champs pour la prochaine fois
+                document.getElementById('new-soiree-titre').value = '';
+                document.getElementById('new-soiree-date').value = '';
+                document.getElementById('new-soiree-lieu').value = '';
+                document.getElementById('new-soiree-desc').value = '';
                 
-                // Fermeture de la modale d'administration (⚠️ Vérifie l'ID de ta modale)
+                // Fermeture de la modale d'administration (Vérifie juste que ta modale s'appelle bien 'admin-modal')
                 document.getElementById('admin-modal').style.display = 'none';
-
-                // Si tu as gardé le Realtime, le tableau de bord se mettra à jour tout seul.
-                // Sinon, décommente la ligne ci-dessous :
-                // await chargerSoirees();
 
             } catch (error) {
                 console.error("Erreur inattendue :", error);
