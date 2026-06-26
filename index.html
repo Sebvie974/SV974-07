@@ -1176,6 +1176,30 @@
                     }
                 }
             }).subscribe();
+
+            // NOUVEAU : Écoute de la table Soirées
+            supabaseClient.channel('public:soirees').on('postgres_changes', { event: '*', schema: 'public', table: 'soirees' }, async () => {
+                // Dès qu'une soirée est ajoutée, modifiée ou supprimée, on recharge la liste !
+                await chargerSoirees();
+            }).subscribe();
+
+            // NOUVEAU : Écoute de la table Sondages (Questions)
+            supabaseClient.channel('public:questions').on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, async () => {
+                // Dès qu'un sondage change, on le recharge !
+                await chargerQuestions();
+            }).subscribe();
+
+            // MISE À JOUR : Écoute de la table Membres
+            supabaseClient.channel('public:membres').on('postgres_changes', { event: '*', schema: 'public', table: 'membres' }, async () => {
+                // On recharge les données de base des membres
+                await chargerMembres();
+                
+                // Si la fenêtre d'administration est ouverte devant les yeux du Bureau, on rafraîchit son tableau
+                const modalAdmin = document.getElementById('admin-modal');
+                if (modalAdmin && modalAdmin.style.display === 'block') {
+                    afficherTableauMembres();
+                }
+            }).subscribe();
         }
 
         // --- PWA ---
