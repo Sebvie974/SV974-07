@@ -739,7 +739,7 @@
                 // 2. Insertion de la soirée dans Supabase
                 const { error: soireeError } = await supabaseClient.from('soirees').insert([{
                     titre: titre,
-                    date_soiree: date,
+                    date: date,
                     lieu: lieu,
                     description: description // Prise en compte de ton champ description
                 }]);
