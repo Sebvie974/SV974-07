@@ -775,7 +775,8 @@
                             titre: titre,
                             date: dateReunion,
                             lieu: lieu,
-                            description: description
+                            description: description,
+                            createur_nom: `${membreConnecte.prenom} ${membreConnecte.nom}`
                         }]);
 
                     if (insertError) return alert("Erreur lors de l'enregistrement.");
@@ -836,14 +837,12 @@
                 const nbPresents = votesSoiree.filter(v => v.statut === 'Present').length;
                 const nbAttente = votesSoiree.filter(v => v.statut === 'A confirmer').length;
                 const nbAbsents = votesSoiree.filter(v => v.statut === 'Absent').length;
-
                 let monStatut = '';
                 if (membreConnecte) { const monVote = votesSoiree.find(v => v.membre_id === membreConnecte.id); if (monVote) monStatut = monVote.statut; }
 
                 const maintenant = new Date();
                 const deuxJoursEnMs = 2 * 24 * 60 * 60 * 1000;
                 const depuisCombienDeTemps = maintenant - objDate;
-
                 const estPassee = maintenant > objDate;
                 const estArchivee = estPassee && (depuisCombienDeTemps > deuxJoursEnMs);
                 const estTermineeMaisVisible = estPassee && (depuisCombienDeTemps <= deuxJoursEnMs);
@@ -851,13 +850,21 @@
                 let badgeTermineeHtml = '';
                 if (estTermineeMaisVisible) badgeTermineeHtml = `<span style="background:#7f8c8d; color:white; padding:3px 8px; border-radius:12px; font-size:12px; margin-left:10px; font-weight:bold; display:inline-block; white-space:nowrap;">✓ Terminée</span>`;
 
+                // --- NOUVEAU : PRÉPARATION DU BADGE CRÉATEUR ---
+                const badgeCreateur = soiree.createur_nom 
+                    ? `<div style="display: inline-block; font-size: 12px; color: #7f8c8d; background-color: #f1f2f6; padding: 4px 10px; border-radius: 12px; margin-bottom: 12px;">
+                        👤 Proposée par ${soiree.createur_nom}
+                       </div>` 
+                    : '';
+                // -----------------------------------------------
+
                 let cardHtml = '';
                 if (soiree.annulee) {
                     const motifTexte = soiree.motif_annulation ? `"${soiree.motif_annulation}"` : "Aucun motif précisé.";
                     cardHtml = `
                         <div class="soiree-card" style="opacity: 0.7; border-left-color: #95a5a6;">
-                            <h2>${soiree.titre}</h2>
-                            <div style="background-color: #f2f4f4; border-left: 4px solid #7f8c8d; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
+                            <h2 style="margin-bottom: 5px;">${soiree.titre}</h2>
+                            ${badgeCreateur} <div style="background-color: #f2f4f4; border-left: 4px solid #7f8c8d; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
                                 <strong style="color: #34495e;">🛑 Soirée annulée</strong>
                                 <p style="margin: 5px 0 0 0; font-size: 14px;">${motifTexte}</p>
                             </div>
@@ -871,7 +878,8 @@
                         </div>
                     `;
                 } else {
-                    let btnEditHtml = ''; let btnCancelHtml = '';
+                    let btnEditHtml = '';
+                    let btnCancelHtml = '';
                     if (membreConnecte && membreConnecte.role === 'Bureau' && !estPassee) {
                         const descSafe = soiree.description ? soiree.description.replace(/'/g, "\\'") : '';
                         const titreSafe = soiree.titre ? soiree.titre.replace(/'/g, "\\'") : '';
@@ -880,14 +888,15 @@
                         btnCancelHtml = `<button class="btn-delete" style="float: right;" onclick="ouvrirModalAnnulationSoiree('${soiree.id}')">🛑 Annuler</button>`;
                     }
 
-                    let alerteHtml = ''; let voteSectionHtml = '';
+                    let alerteHtml = '';
+                    let voteSectionHtml = '';
                     if (estTermineeMaisVisible || estArchivee) {
                         voteSectionHtml = `<p style="color: #7f8c8d; font-style: italic; font-size: 14px; margin-top: 15px;">La soirée est terminée. Les votes sont clos.</p>`;
                     } else {
-                        const dateSoireePure = new Date(objDate); dateSoireePure.setHours(0,0,0,0);
+                        const dateSoireePure = new Date(objDate);
+                        dateSoireePure.setHours(0,0,0,0);
                         const maintenantPure = new Date(); maintenantPure.setHours(0,0,0,0);
                         const diffJours = Math.ceil((dateSoireePure.getTime() - maintenantPure.getTime()) / (1000 * 3600 * 24));
-
                         if (diffJours >= 0 && diffJours <= 15) {
                             let texteJour = diffJours === 0 ? "Aujourd'hui !" : (diffJours === 1 ? "Demain !" : `Dans ${diffJours} jours`);
                             alerteHtml = `<div style="background-color: #f39c12; color: white; padding: 8px; border-radius: 4px; margin-bottom: 15px; text-align: center; font-weight: bold;">⚠️ Rappel : Cette soirée a lieu ${texteJour}</div>`;
@@ -909,8 +918,8 @@
                     cardHtml = `
                         <div class="soiree-card" ${estPassee ? 'style="border-left-color: #7f8c8d;"' : ''}>
                             ${btnEditHtml}${btnCancelHtml}
-                            <h2 style="margin-bottom: 10px;">${soiree.titre} ${badgeTermineeHtml}</h2>
-                            ${alerteHtml}
+                            <h2 style="margin-bottom: 5px;">${soiree.titre} ${badgeTermineeHtml}</h2>
+                            ${badgeCreateur} ${alerteHtml}
                             <p><strong>📅 Date et Heure :</strong> ${affichageDate}</p>
                             <p><strong>📍 Lieu :</strong> ${soiree.lieu || 'Non précisé'}</p>
                             <p>${soiree.description ? soiree.description.replace(/\n/g, '<br>') : ''}</p>
