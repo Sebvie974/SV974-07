@@ -513,9 +513,18 @@
         }
 
         async function seDeconnecter() {
-            await supabaseClient.auth.signOut(); // Déconnexion officielle du moteur de sécurité
+            // 1. Déconnexion officielle du moteur de sécurité
+            await supabaseClient.auth.signOut(); 
+            
+            // 2. Nettoyage de la mémoire locale
             membreConnecte = null;
             localStorage.removeItem('astroUser');
+            
+            // 3. NOUVEAU : Nettoyage des champs de saisie
+            document.getElementById('login-email').value = '';
+            document.getElementById('login-mdp').value = '';
+            
+            // 4. Bascule de l'affichage
             document.getElementById('login-screen').style.display = 'block';
             document.getElementById('main-app').style.display = 'none';
         }
