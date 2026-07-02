@@ -420,7 +420,11 @@
     <script>
         const SUPABASE_URL = 'https://zwbwkhqyjeeykixtpldi.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_RdxzQzvTpjj8nS1B2hDpmw_w4GH_9UC';
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY,);{
+    auth: {
+        storage: window.sessionStorage
+    }
+};
 
         let membresList = [];
         let triColonne = 'prenom'; 
@@ -486,7 +490,7 @@
                 await supabaseClient.auth.signOut(); // On referme la porte
             } else {
                 membreConnecte = membreData;
-                localStorage.setItem('astroUser', JSON.stringify(membreData));
+                sessionStorage.setItem('astroUser', JSON.stringify(membreData));
                 afficherApp();
             }
         }
@@ -507,7 +511,7 @@
                 alert("Mot de passe mis à jour !");
                 membreConnecte.premiere_connexion = false;
                 document.getElementById('force-mdp-screen').style.display = 'none';
-                localStorage.setItem('astroUser', JSON.stringify(membreConnecte)); 
+                sessionStorage.setItem('astroUser', JSON.stringify(membreConnecte)); 
                 afficherApp();
             }
         }
@@ -518,7 +522,7 @@
             
             // 2. Nettoyage de la mémoire locale
             membreConnecte = null;
-            localStorage.removeItem('astroUser');
+            sessionStorage.removeItem('astroUser');
             
             // 3. NOUVEAU : Nettoyage des champs de saisie
             document.getElementById('login-email').value = '';
@@ -1621,7 +1625,7 @@
         // --- DÉMARRAGE DE L'APP ---
         async function init() {
             await verifierLienFinalisation(); 
-            const savedUser = localStorage.getItem('astroUser');
+            const savedUser = sessionStorage.getItem('astroUser');
             if (savedUser && document.getElementById('finalisation-screen').style.display === 'none') {
                 membreConnecte = JSON.parse(savedUser); afficherApp();
             }
