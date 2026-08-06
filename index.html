@@ -116,10 +116,30 @@
         </div>
 
         <button class="btn-creer" onclick="seConnecter()">Se connecter</button>
+        <!-- Bouton pour afficher la zone d'oubli -->
+            <p style="text-align: center; margin-top: 15px;">
+                <a href="#" onclick="afficherZoneOubli()" style="color: #3498db; text-decoration: none;">Mot de passe oublié ?</a>
+            </p>
+
+            <!-- La zone cachée où l'on tape son e-mail -->
+            <div id="zone-oubli" style="display: none; margin-top: 15px; padding: 15px; background-color: #f1f2f6; border-radius: 8px;">
+                <p style="font-size: 14px; margin-bottom: 10px;">Entrez votre adresse e-mail pour recevoir un lien de réinitialisation :</p>
+                <input type="email" id="email-oubli" placeholder="Votre adresse e-mail" style="width: 100%; margin-bottom: 10px;">
+                <button onclick="envoyerEmailReinitialisation()" style="background-color: #f39c12; width: 100%;">Envoyer le lien</button>
+                <button onclick="cacherZoneOubli()" style="background-color: #bdc3c7; width: 100%; margin-top: 5px;">Annuler</button>
+            </div>
         <button type="button" onclick="ouvrirModalDemande()" style="background-color: transparent; color: #34495e; border: 1px solid #34495e; margin-top: 10px; width: 100%; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">
             📝 Demander un accès au club
         </button>
     </div>
+
+    <!-- L'écran de définition du nouveau mot de passe -->
+<div id="ecran-nouveau-mdp" style="display: none; padding: 20px; max-width: 400px; margin: 50px auto; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <h2>Nouveau mot de passe</h2>
+    <p>Veuillez définir votre nouveau mot de passe pour accéder à l'application.</p>
+    <input type="password" id="input-nouveau-mdp" placeholder="Nouveau mot de passe (6 caractères min.)" style="width: 100%; margin-bottom: 15px;">
+    <button onclick="enregistrerNouveauMotDePasse()" style="background-color: #2ecc71; width: 100%;">Enregistrer le mot de passe</button>
+</div>
 
     <div id="force-mdp-screen" style="display: none;">
         <h2 style="color: #e67e22;">Première connexion</h2>
@@ -435,6 +455,19 @@
         let soireeEditionId = null; 
         let modaleDetailsOuverteId = null; 
         let modaleDetailsType = null; 
+
+        // Écouteur d'événements de connexion
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            // Si on détecte que l'utilisateur vient de cliquer sur un lien de réinitialisation
+            if (event === 'PASSWORD_RECOVERY') {
+                // On cache l'écran de connexion et l'application principale
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-app').style.display = 'none';
+                
+                // On affiche uniquement l'écran du nouveau mot de passe
+                document.getElementById('ecran-nouveau-mdp').style.display = 'block';
+            }
+        });
 
         // --- SÉCURITÉ ---
         async function hacherMotDePasse(mdpClair) {
@@ -1620,6 +1653,66 @@
                     </div>
                 `;
             });
+        }
+
+        // 1. Afficher ou cacher la petite zone de saisie d'e-mail
+        function afficherZoneOubli() {
+            document.getElementById('zone-oubli').style.display = 'block';
+        }
+
+        function cacherZoneOubli() {
+            document.getElementById('zone-oubli').style.display = 'none';
+            document.getElementById('email-oubli').value = '';
+        }
+
+        // 2. Envoyer la demande à Supabase
+        async function envoyerEmailReinitialisation() {
+            const email = document.getElementById('email-oubli').value.trim();
+            if (!email) return alert("Veuillez saisir votre adresse e-mail.");
+
+            try {
+                // On demande à Supabase d'envoyer l'e-mail, et on lui dit de renvoyer l'utilisateur vers ton application
+                const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+                    redirectTo: window.location.origin + window.location.pathname
+                });
+
+                if (error) {
+                    console.error("Erreur d'envoi :", error);
+                    return alert("Erreur : Impossible d'envoyer l'e-mail. Vérifiez l'adresse.");
+                }
+
+                alert("Si cette adresse existe, un e-mail contenant un lien de réinitialisation vient de vous être envoyé !");
+                cacherZoneOubli();
+
+            } catch (error) {
+                console.error("Erreur inattendue :", error);
+            }
+        }
+
+        // 3. Enregistrer le nouveau mot de passe une fois revenu sur l'application
+        async function enregistrerNouveauMotDePasse() {
+            const nouveauMdp = document.getElementById('input-nouveau-mdp').value;
+            
+            if (nouveauMdp.length < 6) return alert("Le mot de passe doit contenir au moins 6 caractères.");
+
+            try {
+                // Supabase sait déjà de quel utilisateur il s'agit grâce au lien cliqué !
+                const { error } = await supabaseClient.auth.updateUser({ password: nouveauMdp });
+
+                if (error) {
+                    console.error("Erreur de mise à jour :", error);
+                    return alert("Erreur lors de la modification du mot de passe.");
+                }
+
+                alert("Votre mot de passe a été modifié avec succès !");
+                
+                // On cache l'écran de changement et on recharge la page pour se connecter normalement
+                document.getElementById('ecran-nouveau-mdp').style.display = 'none';
+                window.location.reload();
+
+            } catch (error) {
+                console.error("Erreur inattendue :", error);
+            }
         }
 
         // --- DÉMARRAGE DE L'APP ---
