@@ -599,6 +599,22 @@
             annulerEditionSoiree(); 
         }
 
+        async function tracerAction(typeAction, detailsAction) {
+            // Sécurité : on vérifie qu'un membre est bien connecté
+            if (!membreConnecte) return; 
+
+            try {
+                await supabaseClient.from('historique_actions').insert([{
+                    acteur: `${membreConnecte.prenom} ${membreConnecte.nom}`,
+                    type_action: typeAction,
+                    details: detailsAction,
+                    justification: 'Action Bureau'
+                }]);
+            } catch (error) {
+                console.error("Erreur lors de l'historisation dans le registre :", error);
+            }
+        }
+
         // --- GESTION DES MEMBRES ---
         async function chargerMembres() {
             const { data } = await supabaseClient.from('membres').select('*');
@@ -996,6 +1012,9 @@
             }]);
             if (error) alert("Erreur de création.");
             else {
+                // --- TRACAGE ---
+                await tracerAction('AJOUT_SONDAGE', 'Création du sondage : ' + titre);
+                
                 document.getElementById('new-question-titre').value = ''; document.getElementById('new-question-desc').value = '';
                 fermerModalQuestion(); alert("Sondage publié !"); await chargerQuestions();
             }
@@ -1122,7 +1141,11 @@
         async function cloreQuestion(id) {
             if (!confirm("Voulez-vous vraiment clore ce sondage ?")) return;
             const { error } = await supabaseClient.from('questions').update({ actif: false }).eq('id', id);
-            if (!error) await chargerQuestions();
+            if (!error) {
+                // --- TRACAGE ---
+                await tracerAction('CLOTURE_SONDAGE', "Fermeture anticipée d'un sondage");
+                await chargerQuestions();
+            }
         }
 
         async function soumettreVote(idCible, type) {
@@ -1186,7 +1209,11 @@
         async function confirmerSuppressionDefinitive(id) {
             if (!confirm("Supprimer définitivement ce sondage ?")) return;
             const { error } = await supabaseClient.from('questions').delete().eq('id', id);
-            if (!error) await chargerQuestions();
+            if (!error) {
+                // --- TRACAGE ---
+                await tracerAction('SUPPRESSION_SONDAGE', "Suppression définitive d'un sondage par le Bureau");
+                await chargerQuestions();
+            }
         }
 
         let questionAsupprimerAuteurId = null;
@@ -1195,7 +1222,12 @@
         async function soumettreSuppressionAuteur() {
             const motif = document.getElementById('delete-author-reason-text').value.trim();
             const { error } = await supabaseClient.from('questions').update({ supprime: true, actif: false, motif_suppression: motif }).eq('id', questionAsupprimerAuteurId);
-            if (!error) { fermerModalSuppressionAuteur(); await chargerQuestions(); }
+            if (!error) { 
+                // --- TRACAGE ---
+                await tracerAction('RETRAIT_SONDAGE', "Retrait d'un sondage par son auteur. Motif : " + motif);
+                
+                fermerModalSuppressionAuteur(); await chargerQuestions(); 
+            }
         }
 
         let soireeAAnnulerId = null;
@@ -1205,7 +1237,12 @@
             const motif = document.getElementById('cancel-soiree-reason').value.trim();
             if (!motif) return alert("Motif d'annulation requis.");
             const { error } = await supabaseClient.from('soirees').update({ annulee: true, motif_annulation: motif }).eq('id', soireeAAnnulerId);
-            if (!error) { fermerModalAnnulationSoiree(); await chargerSoirees(); }
+            if (!error) { 
+                // --- TRACAGE ---
+                await tracerAction('ANNULATION_SOIREE', "Annulation d'une soirée programmée. Motif : " + motif);
+                
+                fermerModalAnnulationSoiree(); await chargerSoirees(); 
+            }
         }
 
         // --- REALTIME ---
@@ -1540,8 +1577,20 @@
         async function traiterDemande(id, nouveauStatut) {
             const actionTexte = nouveauStatut === 'validee' ? "valider" : "refuser";
             if (!confirm(`Voulez-vous vraiment ${actionTexte} cette demande ?`)) return;
+            
             const { error } = await supabaseClient.from('demandes_acces').update({ statut: nouveauStatut }).eq('id', id);
-            if (!error) { alert(nouveauStatut === 'validee' ? "Demande approuvée !" : "Demande refusée."); await chargerDemandesAcces(); }
+            
+            if (!error) { 
+                // --- TRACAGE ---
+                if (nouveauStatut === 'validee') {
+                    await tracerAction('VALIDATION_MEMBRE', "Approbation d'une demande d'accès au club");
+                } else {
+                    await tracerAction('REFUS_MEMBRE', "Refus d'une demande d'accès au club");
+                }
+                
+                alert(nouveauStatut === 'validee' ? "Demande approuvée !" : "Demande refusée."); 
+                await chargerDemandesAcces(); 
+            }
         }
 
         // --- FINALISATION DU COMPTE ---
