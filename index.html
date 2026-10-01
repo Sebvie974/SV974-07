@@ -1897,15 +1897,21 @@
                 }
             };
 
-            // 3. On expédie la demande (sans bloquer l'application)
+            // 3. On expédie la demande avec vérification stricte
             fetch('https://api.emailjs.com/api/v1.0/email/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(donneesEmail)
-            }).then(() => {
-                console.log("E-mail envoyé avec succès aux membres !");
+            }).then(async (response) => {
+                if (response.ok) {
+                    console.log("E-mail envoyé avec succès aux membres !");
+                } else {
+                    const erreurTexte = await response.text();
+                    console.error("Le serveur EmailJS a refusé l'envoi :", erreurTexte);
+                    alert("Le document est en ligne, mais un problème de configuration EmailJS a bloqué l'e-mail. (Voir console)");
+                }
             }).catch((erreur) => {
-                console.error("Erreur lors de l'envoi de l'e-mail :", erreur);
+                console.error("Erreur réseau ou technique lors de l'envoi :", erreur);
             });
         }
 
