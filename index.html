@@ -1331,15 +1331,6 @@
                 if (modaleDetailsOuverteId && modaleDetailsType === 'question') afficherDetailsVotes(modaleDetailsOuverteId, 'question');
             }).subscribe();
 
-            // NOUVEAU : Écoute de la table Membres (Mise à jour automatique du tableau Admin)
-            supabaseClient.channel('public:membres').on('postgres_changes', { event: '*', schema: 'public', table: 'membres' }, async () => {
-                await chargerMembres();
-                // Si la fenêtre d'administration est ouverte, on la rafraîchit visuellement
-                if (document.getElementById('admin-modal').style.display === 'block') {
-                    afficherTableauMembres();
-                }
-            }).subscribe();
-
             // NOUVEAU : Écoute des Demandes d'accès (Rafraîchissement + Notification locale)
             supabaseClient.channel('public:demandes').on('postgres_changes', { event: '*', schema: 'public', table: 'demandes_acces' }, async (payload) => {
                 if (membreConnecte && membreConnecte.role === 'Bureau') {
