@@ -222,7 +222,7 @@
             <div id="materiel-container"><p>Chargement de l'inventaire...</p></div>
         </div>
 
-        <div id="onglet-documents" class="tab-content-main" style="display: none;">
+        <div id="onglet-documents" class="tab-content tab-content-main">
             <h2>📁 Documents du Club</h2>
     
             <!-- Bouton visible uniquement par le Bureau (géré en JS) -->
@@ -240,7 +240,7 @@
         </div>
 
         <!-- Modale d'ajout de document -->
-        <div id="modal-add-doc" class="modal" style="display: none;">
+        <div id="modal-add-doc" class="modal-overlay">
             <div class="modal-content">
                 <h2>Ajouter un document</h2>
                 <input type="text" id="new-doc-titre" placeholder="Titre du document (ex: PV AG 2026)">
@@ -254,7 +254,7 @@
             </div>
         </div>
 
-            <div id="onglet-soirees-off" class="tab-content-main" style="display: none;">
+            <div id="onglet-soirees-off" class="tab-content tab-content-main">
                 <h2>🍻 Soirées Off (Entre membres)</h2>
                 <p style="color: #7f8c8d; font-size: 14px;">Ces soirées ne sont pas officielles. Tout membre peut proposer une sortie !</p>
                 
@@ -264,7 +264,7 @@
             </div>
 
             <!-- Modale d'ajout de Soirée Off -->
-            <div id="modal-add-soiree-off" class="modal" style="display: none;">
+            <div id="modal-add-soiree-off" class="modal-overlay">
                 <div class="modal-content">
                     <h2>Proposer une soirée Off</h2>
                     <input type="text" id="new-off-titre" placeholder="Titre (ex: Observation improvisée)">
