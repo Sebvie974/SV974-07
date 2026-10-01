@@ -1845,14 +1845,41 @@
                 const dateFr = new Date(doc.date_ajout).toLocaleDateString('fr-FR');
                 const icone = doc.categorie === 'PV' ? '⚖️' : '📄';
                 
+                // --- NOUVEAU : Bouton de suppression (Uniquement pour le Bureau) ---
+                let btnDeleteHtml = '';
+                if (membreConnecte && membreConnecte.role === 'Bureau') {
+                    const titreSafe = doc.titre.replace(/'/g, "\\'"); // Sécurité pour les apostrophes
+                    btnDeleteHtml = `<button class="btn-delete" style="float: right;" onclick="supprimerDocument('${doc.id}', '${titreSafe}')">🗑️ Supprimer</button>`;
+                }
+                
                 container.innerHTML += `
                     <div class="question-card">
+                        ${btnDeleteHtml}
                         <h3 style="margin-top:0;">${icone} ${doc.titre}</h3>
                         <p style="font-size: 13px; color: #7f8c8d;">Ajouté le ${dateFr} par ${doc.createur_nom}</p>
                         <a href="${doc.lien_url}" target="_blank" style="display: inline-block; padding: 8px 12px; background-color: #3498db; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">Ouvrir le document</a>
                     </div>
                 `;
             });
+        }
+
+        async function supprimerDocument(id, titre) {
+            // 1. Demande de confirmation par sécurité
+            if (!confirm(`Voulez-vous vraiment supprimer ce document de l'application :\n"${titre}" ?\n\n(Note : Cela ne supprimera pas le fichier de votre Google Drive)`)) return;
+            
+            // 2. Suppression dans la base de données
+            const { error } = await supabaseClient.from('documents').delete().eq('id', id);
+            
+            if (error) {
+                console.error("Erreur de suppression :", error);
+                alert("Une erreur est survenue lors de la suppression.");
+            } else {
+                // 3. Tracage dans le registre
+                await tracerAction('SUPPRESSION_DOCUMENT', `Suppression d'un document : ${titre}`);
+                
+                alert("Le document a bien été retiré !");
+                await chargerDocuments(); // Rafraîchissement automatique de la liste
+            }
         }
 
         async function ajouterDocument() {
@@ -1886,7 +1913,7 @@
             // 2. On prépare le colis pour EmailJS
             const donneesEmail = {
                 service_id: 'service_q8cq5d7', // ex: service_gmail
-                template_id: 'template_9a74r1p ', // ex: template_xyz
+                template_id: 'template_9a74r1p', // ex: template_xyz
                 user_id: 'FAru3YxQVU72UjXd3', // Ta clé publique EmailJS
                 template_params: {
                     destinataires: emailsMembres, // Qui ira dans la case BCC
