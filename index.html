@@ -193,9 +193,11 @@
 
         <div class="tabs">
             <button class="tab-btn active tab-btn-main" onclick="changerOngletPrincipal('vue-soirees', this)">🔭 Soirées</button>
+            <button class="tab-btn-main" onclick="changerOngletPrincipal('soirees-off', this)">🍻 Soirées Off</button>
             <button class="tab-btn tab-btn-main" onclick="changerOngletPrincipal('vue-questions', this)">❓ Sondages & Questions</button>
             <button class="tab-btn tab-btn-main" onclick="changerOngletPrincipal('vue-archives', this)">📂 Archives</button>
             <button class="tab-btn tab-btn-main" onclick="changerOngletPrincipal('vue-materiel', this)">🧰 Matériel du club</button>
+            <button class="tab-btn-main" onclick="changerOngletPrincipal('documents', this)">📁 Documents</button>
         </div>
 
         <div id="onglet-vue-soirees" class="tab-content tab-content-main active">
@@ -219,6 +221,60 @@
             </button>
             <div id="materiel-container"><p>Chargement de l'inventaire...</p></div>
         </div>
+
+        <div id="onglet-documents" class="tab-content-main">
+            <h2>📁 Documents du Club</h2>
+    
+            <!-- Bouton visible uniquement par le Bureau (géré en JS) -->
+            <button id="btn-add-doc" onclick="document.getElementById('modal-add-doc').style.display='block'" style="display:none; margin-bottom: 15px; background-color: #27ae60;">+ Ajouter un document</button>
+
+            <!-- Sous-onglets -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button onclick="filtrerDocs('PV')" style="flex: 1;">PV AG Asso</button>
+                <button onclick="filtrerDocs('Divers')" style="flex: 1;">Docs Divers</button>
+                <button onclick="filtrerDocs('Tous')" style="flex: 1; background-color: #7f8c8d;">Tous</button>
+            </div>
+
+            <div id="documents-container"></div>
+
+        </div>
+
+        <!-- Modale d'ajout de document -->
+        <div id="modal-add-doc" class="modal">
+            <div class="modal-content">
+                <h2>Ajouter un document</h2>
+                <input type="text" id="new-doc-titre" placeholder="Titre du document (ex: PV AG 2026)">
+                <select id="new-doc-cat">
+                    <option value="PV">PV AG Asso</option>
+                    <option value="Divers">Docs Divers</option>
+                </select>
+                <input type="url" id="new-doc-url" placeholder="Lien du fichier (Google Drive, Dropbox, etc.)">
+                <button onclick="ajouterDocument()" style="background-color: #3498db; width: 100%;">Publier le document</button>
+                <button onclick="document.getElementById('modal-add-doc').style.display='none'" style="background-color: #e74c3c; width: 100%; margin-top: 10px;">Annuler</button>
+            </div>
+        </div>
+
+            <div id="onglet-soirees-off" class="tab-content-main">
+                <h2>🍻 Soirées Off (Entre membres)</h2>
+                <p style="color: #7f8c8d; font-size: 14px;">Ces soirées ne sont pas officielles. Tout membre peut proposer une sortie !</p>
+                
+                <button onclick="document.getElementById('modal-add-soiree-off').style.display='block'" style="margin-bottom: 15px; background-color: #8e44ad;">+ Proposer une soirée Off</button>
+
+                <div id="soirees-off-container"></div>
+            </div>
+
+            <!-- Modale d'ajout de Soirée Off -->
+            <div id="modal-add-soiree-off" class="modal">
+                <div class="modal-content">
+                    <h2>Proposer une soirée Off</h2>
+                    <input type="text" id="new-off-titre" placeholder="Titre (ex: Observation improvisée)">
+                    <input type="datetime-local" id="new-off-date">
+                    <input type="text" id="new-off-lieu" placeholder="Lieu">
+                    <textarea id="new-off-desc" placeholder="Détails de la soirée..." rows="3"></textarea>
+                    <button onclick="ajouterSoireeOff()" style="background-color: #8e44ad; width: 100%;">Programmer</button>
+                    <button onclick="document.getElementById('modal-add-soiree-off').style.display='none'" style="background-color: #e74c3c; width: 100%; margin-top: 10px;">Annuler</button>
+                </div>
+            </div>
     </div>
 
     <div id="admin-modal" class="modal-overlay">
@@ -584,6 +640,8 @@
             await chargerSoirees();
             await chargerQuestions();
             await chargerMateriel();
+            await chargerDocuments();
+            await chargerSoireesOff();
             ecouterRealtime();
 
         }
@@ -1762,6 +1820,157 @@
             } catch (error) {
                 console.error("Erreur inattendue :", error);
             }
+        }
+
+        // --- GESTION DES DOCUMENTS ---
+        let tousLesDocuments = [];
+
+        async function chargerDocuments() {
+            const container = document.getElementById('documents-container');
+            const btnAdd = document.getElementById('btn-add-doc');
+            
+            // Affichage du bouton d'ajout uniquement pour le Bureau
+            if (membreConnecte && membreConnecte.role === 'Bureau') btnAdd.style.display = 'block';
+            
+            const { data: docs } = await supabaseClient.from('documents').select('*').order('date_ajout', { ascending: false });
+            if (docs) {
+                tousLesDocuments = docs;
+                filtrerDocs('Tous'); // Affiche tout par défaut
+            }
+        }
+
+        function filtrerDocs(categorie) {
+            const container = document.getElementById('documents-container');
+            container.innerHTML = '';
+            
+            let docsAafficher = categorie === 'Tous' ? tousLesDocuments : tousLesDocuments.filter(d => d.categorie === categorie);
+            
+            if (docsAafficher.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#7f8c8d;">Aucun document dans cette catégorie.</p>';
+                return;
+            }
+
+            docsAafficher.forEach(doc => {
+                const dateFr = new Date(doc.date_ajout).toLocaleDateString('fr-FR');
+                const icone = doc.categorie === 'PV' ? '⚖️' : '📄';
+                
+                container.innerHTML += `
+                    <div class="question-card">
+                        <h3 style="margin-top:0;">${icone} ${doc.titre}</h3>
+                        <p style="font-size: 13px; color: #7f8c8d;">Ajouté le ${dateFr} par ${doc.createur_nom}</p>
+                        <a href="${doc.lien_url}" target="_blank" style="display: inline-block; padding: 8px 12px; background-color: #3498db; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">Ouvrir le document</a>
+                    </div>
+                `;
+            });
+        }
+
+        async function ajouterDocument() {
+            const titre = document.getElementById('new-doc-titre').value.trim();
+            const categorie = document.getElementById('new-doc-cat').value;
+            const url = document.getElementById('new-doc-url').value.trim();
+
+            if (!titre || !url) return alert("Le titre et le lien sont obligatoires.");
+
+            const { error } = await supabaseClient.from('documents').insert([{
+                titre: titre, categorie: categorie, lien_url: url, createur_nom: `${membreConnecte.prenom} ${membreConnecte.nom}`
+            }]);
+
+            if (error) return alert("Erreur lors de l'ajout.");
+            
+            await tracerAction('AJOUT_DOCUMENT', `Nouveau document : ${titre} (${categorie})`);
+            document.getElementById('new-doc-titre').value = ''; document.getElementById('new-doc-url').value = '';
+            document.getElementById('modal-add-doc').style.display = 'none';
+            alert("Document publié !");
+            await chargerDocuments();
+            
+            // LA NOTIFICATION EMAIL SERA DÉCLENCHÉE ICI
+            // --- ENVOI DE L'E-MAIL VIA EMAILJS ---
+            
+            // 1. On récupère les adresses de tous les membres actifs
+            const emailsMembres = membresList
+                .filter(m => m.actif !== false && m.email)
+                .map(m => m.email)
+                .join(','); // Crée une liste : "jean@mail.com,paul@mail.com"
+
+            // 2. On prépare le colis pour EmailJS
+            const donneesEmail = {
+                service_id: 'service_q8cq5d7', // ex: service_gmail
+                template_id: 'template_9a74r1p ', // ex: template_xyz
+                user_id: 'FAru3YxQVU72UjXd3', // Ta clé publique EmailJS
+                template_params: {
+                    destinataires: emailsMembres, // Qui ira dans la case BCC
+                    doc_titre: titre,
+                    doc_cat: categorie,
+                    createur: `${membreConnecte.prenom} ${membreConnecte.nom}`,
+                    doc_lien: url
+                }
+            };
+
+            // 3. On expédie la demande (sans bloquer l'application)
+            fetch('https://api.emailjs.com/api/v1.0/email/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(donneesEmail)
+            }).then(() => {
+                console.log("E-mail envoyé avec succès aux membres !");
+            }).catch((erreur) => {
+                console.error("Erreur lors de l'envoi de l'e-mail :", erreur);
+            });
+        }
+
+        // --- GESTION DES SOIRÉES OFF ---
+        async function chargerSoireesOff() {
+            const container = document.getElementById('soirees-off-container');
+            const maintenant = new Date().toISOString();
+            
+            // On ne charge que les soirées futures ou récentes
+            const { data: soireesOff } = await supabaseClient.from('soirees_off').select('*').gte('date', maintenant).order('date', { ascending: true });
+            
+            if (!soireesOff || soireesOff.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#7f8c8d;">Aucune soirée Off de prévue. Lance-toi !</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            soireesOff.forEach(soiree => {
+                const dateObj = new Date(soiree.date);
+                const affichageDate = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' à ' + dateObj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                
+                container.innerHTML += `
+                    <div class="question-card" style="border-left-color: #8e44ad;">
+                        <h2 style="margin-bottom: 5px;">${soiree.titre}</h2>
+                        <div style="display: inline-block; font-size: 12px; color: #7f8c8d; background-color: #f1f2f6; padding: 4px 10px; border-radius: 12px; margin-bottom: 12px;">
+                            👤 Proposée par ${soiree.createur_nom}
+                        </div>
+                        <p><strong>📅 Date et Heure :</strong> ${affichageDate}</p>
+                        <p><strong>📍 Lieu :</strong> ${soiree.lieu || 'Non précisé'}</p>
+                        <p>${soiree.description ? soiree.description.replace(/\n/g, '<br>') : ''}</p>
+                    </div>
+                `;
+            });
+        }
+
+        async function ajouterSoireeOff() {
+            const titre = document.getElementById('new-off-titre').value.trim(); 
+            const dateSaisie = document.getElementById('new-off-date').value;
+            const lieu = document.getElementById('new-off-lieu').value.trim();
+            const description = document.getElementById('new-off-desc').value.trim();
+
+            if (!titre || !dateSaisie) return alert("Le titre et la date sont obligatoires.");
+
+            const dateReunion = dateSaisie + ":00+04:00";
+
+            const { error } = await supabaseClient.from('soirees_off').insert([{
+                titre: titre, date: dateReunion, lieu: lieu, description: description, createur_nom: `${membreConnecte.prenom} ${membreConnecte.nom}`
+            }]);
+
+            if (error) return alert("Erreur lors de l'enregistrement.");
+
+            document.getElementById('new-off-titre').value = ''; document.getElementById('new-off-date').value = '';
+            document.getElementById('new-off-lieu').value = ''; document.getElementById('new-off-desc').value = '';
+            document.getElementById('modal-add-soiree-off').style.display = 'none';
+            alert("Soirée Off programmée !");
+            await chargerSoireesOff();
         }
 
         // --- DÉMARRAGE DE L'APP ---
