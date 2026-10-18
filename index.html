@@ -1371,6 +1371,9 @@
                     afficherTableauMembres();
                 }
             }).subscribe();
+
+            //Ecoute de la table Vote Soirée Off
+            supabaseClient.channel('public:votes_off').on('postgres_changes', { event: '*', schema: 'public', table: 'votes_off' }, async () => { await chargerSoireesOff(); }).subscribe();
         }
 
         // --- PWA ---
@@ -1942,13 +1945,13 @@
             });
         }
 
-        // --- GESTION DES SOIRÉES OFF ---
         async function chargerSoireesOff() {
             const container = document.getElementById('soirees-off-container');
             const maintenant = new Date().toISOString();
             
-            // On ne charge que les soirées futures ou récentes
+            // On charge les soirées Off ET les votes associés
             const { data: soireesOff } = await supabaseClient.from('soirees_off').select('*').gte('date', maintenant).order('date', { ascending: true });
+            const { data: votesOff } = await supabaseClient.from('votes_off').select('*');
             
             if (!soireesOff || soireesOff.length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:#7f8c8d;">Aucune soirée Off de prévue. Lance-toi !</p>';
@@ -1960,6 +1963,31 @@
                 const dateObj = new Date(soiree.date);
                 const affichageDate = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' à ' + dateObj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
                 
+                // --- CALCUL DES VOTES ---
+                const votesDeCetteSoiree = (votesOff || []).filter(v => v.soiree_off_id === soiree.id);
+                const nbOui = votesDeCetteSoiree.filter(v => v.statut === 'Oui').length;
+                const nbNon = votesDeCetteSoiree.filter(v => v.statut === 'Non').length;
+                const nbAConfirmer = votesDeCetteSoiree.filter(v => v.statut === 'A confirmer').length;
+                
+                let monStatut = '';
+                if (membreConnecte) { 
+                    const monVote = votesDeCetteSoiree.find(v => v.membre_id === membreConnecte.id); 
+                    if (monVote) monStatut = monVote.statut; 
+                }
+
+                const voteSectionHtml = `
+                    <div class="vote-section">
+                        <select id="statut-off-select-${soiree.id}">
+                            <option value="" ${monStatut === '' ? 'selected' : ''} disabled>-- Êtes-vous intéressé(e) ? --</option>
+                            <option value="Oui" ${monStatut === 'Oui' ? 'selected' : ''}>✅ Oui</option>
+                            <option value="A confirmer" ${monStatut === 'A confirmer' ? 'selected' : ''}>⏳ À confirmer</option>
+                            <option value="Non" ${monStatut === 'Non' ? 'selected' : ''}>❌ Non</option>
+                        </select>
+                        <button onclick="soumettreVoteOff('${soiree.id}')" style="background-color: #8e44ad;">${monStatut === '' ? 'Enregistrer' : 'Modifier'} mon choix</button>
+                    </div>
+                `;
+                // ------------------------
+
                 container.innerHTML += `
                     <div class="question-card" style="border-left-color: #8e44ad;">
                         <h2 style="margin-bottom: 5px;">${soiree.titre}</h2>
@@ -1969,9 +1997,42 @@
                         <p><strong>📅 Date et Heure :</strong> ${affichageDate}</p>
                         <p><strong>📍 Lieu :</strong> ${soiree.lieu || 'Non précisé'}</p>
                         <p>${soiree.description ? soiree.description.replace(/\n/g, '<br>') : ''}</p>
+                        
+                        <!-- BARRE DE STATISTIQUES -->
+                        <div class="stats-bar" style="cursor: default;">
+                            <span class="stat-badge stat-present" id="stat-off-oui-${soiree.id}">✅ Oui: ${nbOui}</span>
+                            <span class="stat-badge stat-attente" id="stat-off-attente-${soiree.id}">⏳ À confirmer: ${nbAConfirmer}</span>
+                            <span class="stat-badge stat-absent" id="stat-off-non-${soiree.id}">❌ Non: ${nbNon}</span>
+                        </div>
+                        
+                        ${voteSectionHtml}
                     </div>
                 `;
             });
+        }
+
+        async function soumettreVoteOff(soireeOffId) {
+            const selectId = `statut-off-select-${soireeOffId}`;
+            const valeur = document.getElementById(selectId).value;
+            
+            if (!valeur) return alert("Veuillez d'abord sélectionner une réponse dans la liste.");
+
+            const dataObj = { 
+                membre_id: membreConnecte.id,
+                soiree_off_id: soireeOffId,
+                statut: valeur
+            };
+
+            // On utilise upsert pour insérer le vote ou le mettre à jour s'il existe déjà
+            const { error } = await supabaseClient.from('votes_off').upsert([dataObj], { onConflict: 'soiree_off_id, membre_id' });
+            
+            if (error) {
+                console.error(error);
+                alert("Erreur lors de l'enregistrement de votre réponse.");
+            } else { 
+                alert("Choix enregistré !"); 
+                await chargerSoireesOff(); // On recharge pour mettre à jour les compteurs
+            }
         }
 
         async function ajouterSoireeOff() {
