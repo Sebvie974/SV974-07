@@ -1222,33 +1222,57 @@
         }
 
         async function afficherDetailsVotes(id, type) {
-            modaleDetailsOuverteId = id; modaleDetailsType = type;
+            modaleDetailsOuverteId = id; 
+            modaleDetailsType = type;
             document.getElementById('details-votes-modal').style.display = 'block';
-            const container = document.getElementById('details-votes-container'); container.innerHTML = '<p>Chargement...</p>';
+            const container = document.getElementById('details-votes-container'); 
+            container.innerHTML = '<p>Chargement...</p>';
 
             if (type === 'soiree') {
                 document.getElementById('titre-details-modal').innerText = "Récapitulatif des présences";
                 const { data: votes } = await supabaseClient.from('votes').select('*').eq('soiree_id', id);
                 let htmlPresents = '<ul>', htmlAttente = '<ul>', htmlAbsents = '<ul>';
-                votes.forEach(v => {
-                    const m = membresList.find(m => m.id === v.membre_id);
-                    if (m) {
-                        let li = `<li>${m.prenom} ${m.nom}</li>`;
-                        if (v.statut === 'Present') htmlPresents += li; else if (v.statut === 'A confirmer') htmlAttente += li; else if (v.statut === 'Absent') htmlAbsents += li;
-                    }
-                });
+                if(votes) {
+                    votes.forEach(v => {
+                        const m = membresList.find(m => m.id === v.membre_id);
+                        if (m) {
+                            let li = `<li>${m.prenom} ${m.nom}</li>`;
+                            if (v.statut === 'Present') htmlPresents += li; else if (v.statut === 'A confirmer') htmlAttente += li; else if (v.statut === 'Absent') htmlAbsents += li;
+                        }
+                    });
+                }
                 container.innerHTML = `<div class="details-list stat-present"><h4>✅ Présents</h4> ${htmlPresents === '<ul>' ? '<p>Aucun</p>' : htmlPresents + '</ul>'}</div><div class="details-list stat-attente"><h4>⏳ À confirmer</h4> ${htmlAttente === '<ul>' ? '<p>Aucun</p>' : htmlAttente + '</ul>'}</div><div class="details-list stat-absent"><h4>❌ Absents</h4> ${htmlAbsents === '<ul>' ? '<p>Aucun</p>' : htmlAbsents + '</ul>'}</div>`;
+            
+            } else if (type === 'soiree_off') {
+                // NOUVEAU : Traitement pour les Soirées Off
+                document.getElementById('titre-details-modal').innerText = "Récapitulatif des présences (Off)";
+                const { data: votesOff } = await supabaseClient.from('votes_off').select('*').eq('soiree_off_id', id);
+                let htmlOui = '<ul>', htmlAttente = '<ul>', htmlNon = '<ul>';
+                if(votesOff) {
+                    votesOff.forEach(v => {
+                        const m = membresList.find(m => m.id === v.membre_id);
+                        if (m) {
+                            let li = `<li>${m.prenom} ${m.nom}</li>`;
+                            if (v.statut === 'Oui') htmlOui += li; else if (v.statut === 'A confirmer') htmlAttente += li; else if (v.statut === 'Non') htmlNon += li;
+                        }
+                    });
+                }
+                container.innerHTML = `<div class="details-list stat-present"><h4>✅ Oui</h4> ${htmlOui === '<ul>' ? '<p>Aucun</p>' : htmlOui + '</ul>'}</div><div class="details-list stat-attente"><h4>⏳ À confirmer</h4> ${htmlAttente === '<ul>' ? '<p>Aucun</p>' : htmlAttente + '</ul>'}</div><div class="details-list stat-absent"><h4>❌ Non</h4> ${htmlNon === '<ul>' ? '<p>Aucun</p>' : htmlNon + '</ul>'}</div>`;
+            
             } else {
+                // Traitement pour les Sondages (Questions)
                 document.getElementById('titre-details-modal').innerText = "Récapitulatif des réponses";
                 const { data: reponses } = await supabaseClient.from('reponses').select('*').eq('question_id', id);
                 let htmlPour = '<ul>', htmlContre = '<ul>', htmlAbs = '<ul>';
-                reponses.forEach(r => {
-                    const m = membresList.find(m => m.id === r.membre_id);
-                    if (m) {
-                        let li = `<li>${m.prenom} ${m.nom}</li>`;
-                        if (r.choix === 'Pour') htmlPour += li; else if (r.choix === 'Contre') htmlContre += li; else if (r.choix === 'Abstention') htmlAbs += li;
-                    }
-                });
+                if(reponses) {
+                    reponses.forEach(r => {
+                        const m = membresList.find(m => m.id === r.membre_id);
+                        if (m) {
+                            let li = `<li>${m.prenom} ${m.nom}</li>`;
+                            if (r.choix === 'Pour') htmlPour += li; else if (r.choix === 'Contre') htmlContre += li; else if (r.choix === 'Abstention') htmlAbs += li;
+                        }
+                    });
+                }
                 container.innerHTML = `<div class="details-list stat-present"><h4>👍 Pour</h4> ${htmlPour === '<ul>' ? '<p>Aucun</p>' : htmlPour + '</ul>'}</div><div class="details-list stat-absent"><h4>👎 Contre</h4> ${htmlContre === '<ul>' ? '<p>Aucun</p>' : htmlContre + '</ul>'}</div><div class="details-list stat-attente"><h4>🤷 Abstention</h4> ${htmlAbs === '<ul>' ? '<p>Aucun</p>' : htmlAbs + '</ul>'}</div>`;
             }
         }
@@ -1999,7 +2023,7 @@
                         <p>${soiree.description ? soiree.description.replace(/\n/g, '<br>') : ''}</p>
                         
                         <!-- BARRE DE STATISTIQUES -->
-                        <div class="stats-bar" style="cursor: default;">
+                        <div class="stats-bar" onclick="afficherDetailsVotes('${soiree.id}', 'soiree_off')">
                             <span class="stat-badge stat-present" id="stat-off-oui-${soiree.id}">✅ Oui: ${nbOui}</span>
                             <span class="stat-badge stat-attente" id="stat-off-attente-${soiree.id}">⏳ À confirmer: ${nbAConfirmer}</span>
                             <span class="stat-badge stat-absent" id="stat-off-non-${soiree.id}">❌ Non: ${nbNon}</span>
