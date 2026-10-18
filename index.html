@@ -1213,12 +1213,41 @@
             let selectId = type === 'soiree' ? `statut-select-${idCible}` : `reponse-select-${idCible}`;
             
             const valeur = document.getElementById(selectId).value;
+            if (!valeur) return alert("Veuillez faire un choix avant de valider.");
+
             const dataObj = { membre_id: membreConnecte.id };
             dataObj[colonneCible] = idCible; dataObj[colonneValeur] = valeur;
 
             const { error } = await supabaseClient.from(table).upsert([dataObj], { onConflict: `${colonneCible}, membre_id` });
-            if (error) alert("Erreur lors de l'enregistrement.");
-            else { alert("Choix enregistré !"); if(type === 'soiree') await chargerSoirees(); if(type === 'question') await chargerQuestions(); }
+            
+            if (error) {
+                alert("Erreur lors de l'enregistrement.");
+            } else { 
+                // --- NOUVEAU : TRACAGE DANS LE REGISTRE ---
+                try {
+                    let titre = "Élément inconnu";
+                    
+                    if (type === 'soiree') {
+                        // On récupère le titre de la soirée officielle
+                        const { data: soiree } = await supabaseClient.from('soirees').select('titre').eq('id', idCible).single();
+                        if (soiree) titre = soiree.titre;
+                        await tracerAction('VOTE_SOIREE', `A voté "${valeur}" pour la soirée officielle : ${titre}`);
+                        
+                    } else if (type === 'question') {
+                        // On récupère le titre du sondage
+                        const { data: question } = await supabaseClient.from('questions').select('titre').eq('id', idCible).single();
+                        if (question) titre = question.titre;
+                        await tracerAction('VOTE_SONDAGE', `A répondu "${valeur}" au sondage : ${titre}`);
+                    }
+                } catch (err) {
+                    console.error("Erreur lors de la récupération du titre pour les logs :", err);
+                }
+                // ----------------------------------------
+
+                alert("Choix enregistré !"); 
+                if(type === 'soiree') await chargerSoirees(); 
+                if(type === 'question') await chargerQuestions(); 
+            }
         }
 
         async function afficherDetailsVotes(id, type) {
