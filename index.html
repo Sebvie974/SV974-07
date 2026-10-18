@@ -2054,6 +2054,14 @@
                 console.error(error);
                 alert("Erreur lors de l'enregistrement de votre réponse.");
             } else { 
+                // --- NOUVEAU : TRACAGE DANS LE REGISTRE ---
+                // On récupère d'abord le titre de la soirée pour que le journal soit lisible
+                const { data: soiree } = await supabaseClient.from('soirees_off').select('titre').eq('id', soireeOffId).single();
+                const titreSoiree = soiree ? soiree.titre : 'Soirée inconnue';
+                
+                await tracerAction('VOTE_SOIREE_OFF', `A voté "${valeur}" pour la soirée : ${titreSoiree}`);
+                // ----------------------------------------
+                
                 alert("Choix enregistré !"); 
                 await chargerSoireesOff(); // On recharge pour mettre à jour les compteurs
             }
@@ -2074,6 +2082,9 @@
             }]);
 
             if (error) return alert("Erreur lors de l'enregistrement.");
+
+            // --- NOUVEAU : TRACAGE DANS LE REGISTRE ---
+            await tracerAction('AJOUT_SOIREE_OFF', `Proposition d'une soirée Off : ${titre}`);
 
             document.getElementById('new-off-titre').value = ''; document.getElementById('new-off-date').value = '';
             document.getElementById('new-off-lieu').value = ''; document.getElementById('new-off-desc').value = '';
