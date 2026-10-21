@@ -1517,6 +1517,13 @@
 
             //Ecoute de la table Vote Soirée Off
             supabaseClient.channel('public:votes_off').on('postgres_changes', { event: '*', schema: 'public', table: 'votes_off' }, async () => { await chargerSoireesOff(); }).subscribe();
+
+            // Écoute en direct des votes pour les sondages
+        supabaseClient.channel('public:reponses')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'reponses' }, async () => {
+                await chargerQuestions(); // Rafraîchit les barres de stats instantanément
+            })
+            .subscribe();
         }
 
         // --- PWA ---
