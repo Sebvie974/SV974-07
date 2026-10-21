@@ -1548,6 +1548,59 @@
             return outputArray;
         }
 
+        // 1. Vérifier l'état sur CET appareil à l'ouverture de l'app
+async function verifierStatutPushLocal() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+    
+    const registration = await navigator.serviceWorker.ready;
+    const abonnement = await registration.pushManager.getSubscription();
+    
+    // Si abonnement existe, on coche visuellement ton bouton de notification
+    const toggleBtn = document.getElementById('bouton-toggle-notif');
+    if (toggleBtn) {
+        toggleBtn.checked = abonnement !== null;
+    }
+    return abonnement !== null;
+}
+
+// 2. Fonction déclenchée quand le membre clique sur ton bouton de notification
+async function basculerAbonnementPush() {
+    const registration = await navigator.serviceWorker.ready;
+    let abonnement = await registration.pushManager.getSubscription();
+
+    if (abonnement) {
+        // L'appareil est déjà abonné -> On le désabonne
+        await abonnement.unsubscribe();
+        
+        // On nettoie la base de données
+        await supabaseClient.from('abonnements_push')
+            .delete()
+            .eq('abonnement->>endpoint', abonnement.endpoint);
+            
+        console.log("Appareil désabonné des notifications.");
+    } else {
+        // L'appareil n'est pas abonné -> On l'inscrit
+        try {
+            abonnement = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+            });
+
+            // On sauvegarde ce nouvel appareil dans Supabase
+            await supabaseClient.from('abonnements_push').insert([{
+                membre_id: membreConnecte.id,
+                abonnement: JSON.parse(JSON.stringify(abonnement)),
+                appareil: navigator.userAgent.substring(0, 50) // Petit repère technique
+            }]);
+            
+            console.log("Appareil enregistré avec succès pour les Push !");
+        } catch (erreur) {
+            console.error("L'utilisateur a refusé ou une erreur est survenue :", erreur);
+            document.getElementById('bouton-toggle-notif').checked = false; // On remet le bouton à zéro
+        }
+    }
+}
+
         async function ouvrirModalNotifs() {
             // On récupère les préférences actuelles du membre depuis Supabase
             const { data: membreData } = await supabaseClient.from('membres').select('notif_push, notif_mail').eq('id', membreConnecte.id).single();
@@ -1557,6 +1610,8 @@
                 document.getElementById('check-notif-mail').checked = membreData.notif_mail;
             }
             document.getElementById('modal-notifs').style.display = 'block';
+
+            chargerEtatBoutonPush();
         }
 
         function fermerModalNotifs() {
@@ -1567,7 +1622,7 @@
             const veutPush = document.getElementById('check-notif-push').checked;
             const veutMail = document.getElementById('check-notif-mail').checked;
 
-            // 1. GESTION DU PUSH TECHNIQUE SUR L'APPAREIL
+            // 1. GESTION DU PUSH TECHNIQUE SUR CET APPAREIL UNIQUEMENT
             if (veutPush) {
                 if (!('Notification' in window) || !('serviceWorker' in navigator)) {
                     document.getElementById('check-notif-push').checked = false;
@@ -1600,7 +1655,7 @@
                     return alert("Erreur lors de l'activation du Push.");
                 }
             } else {
-                // Si l'utilisateur décoche le Push, on le désabonne localement
+                // Désabonnement local
                 if ('serviceWorker' in navigator) {
                     const registration = await navigator.serviceWorker.ready;
                     const subscription = await registration.pushManager.getSubscription();
@@ -1611,16 +1666,16 @@
                 }
             }
 
-            // 2. SAUVEGARDE DES PRÉFÉRENCES DANS LA FICHE MEMBRE
+            // 2. SAUVEGARDE DES PRÉFÉRENCES (On ne sauvegarde QUE le mail globalement)
             const { error } = await supabaseClient.from('membres')
-                .update({ notif_push: veutPush, notif_mail: veutMail })
+                .update({ notif_mail: veutMail }) // <-- notif_push a été retiré
                 .eq('id', membreConnecte.id);
 
             if (error) {
                 alert("Erreur lors de la sauvegarde.");
             } else {
                 alert("Préférences d'alertes mises à jour avec succès !");
-                fermerModalNotifs();
+                fermerModalNotifs(); // Ou le nom de ta fonction pour fermer
             }
         }
 
@@ -2234,6 +2289,15 @@
             const autreEl = document.getElementById(`reponse-autre-${id}`);
             if (selectEl && autreEl) {
                 autreEl.style.display = selectEl.value === 'AUTRE' ? 'inline-block' : 'none';
+            }
+        }
+
+        async function chargerEtatBoutonPush() {
+            if ('serviceWorker' in navigator) {
+                const registration = await navigator.serviceWorker.ready;
+                const subscription = await registration.pushManager.getSubscription();
+                // Coche la case uniquement si CET appareil a une clé VAPID active
+                document.getElementById('check-notif-push').checked = (subscription !== null);
             }
         }
 
