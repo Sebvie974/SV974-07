@@ -1300,7 +1300,7 @@
             const dataObj = { membre_id: membreConnecte.id };
             dataObj[colonneCible] = idCible; dataObj[colonneValeur] = valeur;
 
-            const { error } = await supabaseClient.from(table).upsert([dataObj], { onConflict: `${colonneCible}, membre_id` });
+            const { error } = await supabaseClient.from(table).upsert([dataObj], { onConflict: `${colonneCible},membre_id` });
             
             if (error) {
                 alert("Erreur lors de l'enregistrement.");
