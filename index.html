@@ -372,11 +372,29 @@
             <div class="form-section" style="margin-bottom: 0; background: transparent; padding: 0;">
                 <h3 style="color: #8e44ad;">💡 Soumettre un sondage</h3>
                 <input type="text" id="new-question-titre" class="full-width" placeholder="Votre question" style="margin-bottom: 10px;">
-                <select id="new-question-cible" class="full-width" style="margin-bottom: 10px;">
+                <select id="new-question-cible" class="full-width" style="margin-bottom: 15px;">
                     <option value="Tous">Visible par : Tous les membres</option>
                     <option value="Bureau" id="opt-cible-bureau">Visible par : Uniquement le Bureau</option>
                 </select>
-                <textarea id="new-question-desc" rows="3" placeholder="Détails..."></textarea>
+                
+                <!-- NOUVEAU : Type de sondage -->
+                <label style="font-size: 14px; color: #7f8c8d; font-weight: bold;">Type de réponse attendue :</label>
+                <select id="new-question-type" class="full-width" style="margin-bottom: 10px;" onchange="gererFormulaireSondage()">
+                    <option value="classique">👍 Pour / Contre / Abstention (Classique)</option>
+                    <option value="oui_non_peutetre">✅ Oui / Non / Peut-être</option>
+                    <option value="oui_non">✅ Oui / Non</option>
+                    <option value="choix_multiples">📋 Choix définis (Liste fixe)</option>
+                    <option value="choix_ouverts">➕ Choix définis + Possibilité d'en rajouter</option>
+                    <option value="texte_libre">📝 Réponse libre (Texte)</option>
+                </select>
+                
+                <!-- Zone cachée pour les choix multiples -->
+                <div id="zone-options-sondage" style="display: none; margin-bottom: 15px; padding: 10px; background: #f2f4f4; border-radius: 4px; border-left: 3px solid #8e44ad;">
+                    <label style="font-size: 13px; color: #34495e;">Saisissez les choix possibles séparés par une virgule :</label>
+                    <input type="text" id="new-question-options" class="full-width" placeholder="Ex: Jupiter, Saturne, Mars" style="margin-top: 5px;">
+                </div>
+                
+                <textarea id="new-question-desc" rows="3" placeholder="Détails (Optionnel)..." class="full-width"></textarea>
                 <button class="btn-creer" style="background-color: #8e44ad;" onclick="ajouterQuestion()">Publier le sondage</button>
             </div>
         </div>
@@ -1062,19 +1080,38 @@
         async function ajouterQuestion() {
             const titre = document.getElementById('new-question-titre').value.trim();
             const cible = document.getElementById('new-question-cible').value;
+            const type = document.getElementById('new-question-type').value;
             const desc = document.getElementById('new-question-desc').value.trim();
+            let options = [];
+
+            if (type === 'choix_multiples' || type === 'choix_ouverts') {
+                const optionsBrutes = document.getElementById('new-question-options').value;
+                options = optionsBrutes.split(',').map(o => o.trim()).filter(o => o !== '');
+                if (options.length === 0) return alert("Veuillez saisir au moins un choix séparé par une virgule.");
+            }
+
             if (!titre) return alert("Le titre est obligatoire.");
 
             const { error } = await supabaseClient.from('questions').insert([{ 
-                titre: titre, cible: cible, description: desc, auteur_id: membreConnecte.id 
+                titre: titre, cible: cible, description: desc, auteur_id: membreConnecte.id,
+                type_sondage: type, options_sondage: JSON.stringify(options)
             }]);
-            if (error) alert("Erreur de création.");
-            else {
-                // --- TRACAGE ---
+            
+            if (error) {
+                alert("Erreur de création.");
+            } else {
                 await tracerAction('AJOUT_SONDAGE', 'Création du sondage : ' + titre);
                 
-                document.getElementById('new-question-titre').value = ''; document.getElementById('new-question-desc').value = '';
-                fermerModalQuestion(); alert("Sondage publié !"); await chargerQuestions();
+                // Nettoyage
+                document.getElementById('new-question-titre').value = ''; 
+                document.getElementById('new-question-desc').value = '';
+                document.getElementById('new-question-options').value = '';
+                document.getElementById('new-question-type').value = 'classique';
+                gererFormulaireSondage();
+                
+                fermerModalQuestion(); 
+                alert("Sondage publié !"); 
+                await chargerQuestions();
             }
         }
 
@@ -1111,17 +1148,31 @@
             container.innerHTML = ''; 
             questionsVisibles.forEach(question => {
                 const reponsesQuestion = reponses.filter(r => r.question_id === question.id);
-                const nbPour = reponsesQuestion.filter(r => r.choix === 'Pour').length;
-                const nbContre = reponsesQuestion.filter(r => r.choix === 'Contre').length;
-                const nbAbstention = reponsesQuestion.filter(r => r.choix === 'Abstention').length;
-
                 let monChoix = '';
                 if (membreConnecte) { const maReponse = reponsesQuestion.find(r => r.membre_id === membreConnecte.id); if (maReponse) monChoix = maReponse.choix; }
 
                 const auteurInfo = membresList.find(m => m.id === question.auteur_id);
                 const auteurNom = auteurInfo ? `${auteurInfo.prenom} ${auteurInfo.nom}` : 'Ancien membre';
                 const cibleBadge = question.cible === 'Bureau' ? `<span style="background:#e74c3c; color:white; padding:3px 8px; border-radius:12px; font-size:12px; margin-left:10px;">Privé (Bureau)</span>` : `<span style="background:#3498db; color:white; padding:3px 8px; border-radius:12px; font-size:12px; margin-left:10px;">Public (Tous)</span>`;
-                const auteurSpan = `<span style="font-size: 14px; font-weight: normal; color: #7f8c8d; display:block; margin-top:5px;">Par ${auteurNom}</span>`;
+
+                // --- IDENTIFICATION DU TYPE ---
+                const typeSondage = question.type_sondage || 'classique';
+                let optionsSondage = [];
+                if (question.options_sondage) { try { optionsSondage = JSON.parse(question.options_sondage); } catch(e){} }
+
+                // --- CALCUL DYNAMIQUE DES STATISTIQUES ---
+                const counts = {};
+                reponsesQuestion.forEach(r => { counts[r.choix] = (counts[r.choix] || 0) + 1; });
+                
+                let statsHtml = '';
+                if (typeSondage === 'texte_libre') {
+                    statsHtml = `<span class="stat-badge stat-present">📝 ${reponsesQuestion.length} réponse(s) enregistrée(s)</span>`;
+                } else {
+                    Object.entries(counts).forEach(([choix, nb]) => {
+                        statsHtml += `<span class="stat-badge" style="background: #ecf0f1; color: #2c3e50; padding: 4px 8px; border-radius: 12px; margin-right: 5px; display: inline-block; margin-bottom: 5px; border: 1px solid #bdc3c7;">${choix}: ${nb}</span>`;
+                    });
+                    if (Object.keys(counts).length === 0) statsHtml = `<span class="stat-badge" style="color:#7f8c8d;">Aucun vote pour le moment</span>`;
+                }
 
                 if (question.supprime) {
                     const motifTexte = question.motif_suppression ? `"${question.motif_suppression}"` : "Aucune explication fournie.";
@@ -1132,45 +1183,59 @@
                                 <strong style="color: #34495e;">🛑 Retiré par son auteur (${auteurNom})</strong>
                                 <p style="margin: 5px 0 0 0; font-size: 14px;">${motifTexte}</p>
                             </div>
-                            <p style="text-decoration: line-through; color:#95a5a6;">${question.description ? question.description.replace(/\n/g, '<br>') : ''}</p>
                         </div>
                     `;
                 } else {
                     let actionsHtml = ''; let alerteSuppressionHtml = ''; let voteSectionHtml = ''; let btnCloreHtml = ''; 
 
                     if (question.en_demande_suppression) {
-                        alerteSuppressionHtml = `
-                            <div style="background-color: #fce4e4; border-left: 4px solid #e74c3c; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
-                                <strong style="color: #c0392b;">⚠️ Retrait demandé par le Bureau :</strong>
-                                <p style="margin: 5px 0 0 0; font-size: 14px;">"${question.motif_suppression}"</p>
-                            </div>
-                        `;
-                        if (membreConnecte && (membreConnecte.id === question.auteur_id || membreConnecte.role === 'Bureau')) {
-                            actionsHtml = `<button class="btn-delete" style="float: right;" onclick="confirmerSuppressionDefinitive('${question.id}')">🗑️ Confirmer suppression</button>`;
-                        }
+                        alerteSuppressionHtml = `<div style="background-color: #fce4e4; border-left: 4px solid #e74c3c; padding: 10px; margin-bottom: 15px; border-radius: 4px;"><strong style="color: #c0392b;">⚠️ Retrait demandé par le Bureau</strong></div>`;
+                        if (membreConnecte && (membreConnecte.id === question.auteur_id || membreConnecte.role === 'Bureau')) actionsHtml = `<button class="btn-delete" style="float: right;" onclick="confirmerSuppressionDefinitive('${question.id}')">🗑️ Confirmer suppression</button>`;
                         voteSectionHtml = `<p style="color: #7f8c8d; font-style: italic; font-size: 14px;">Les votes sont suspendus.</p>`;
                     } else {
                         if (membreConnecte) {
-                            if (question.auteur_id && membreConnecte.id === question.auteur_id) {
-                                actionsHtml = `<button class="btn-delete" style="float: right;" onclick="ouvrirModalSuppressionAuteur('${question.id}')">🗑️ Retirer mon sondage</button>`;
-                            } else if (membreConnecte.role === 'Bureau') {
-                                actionsHtml = `<button class="btn-edit" style="float: right; background-color:#e67e22;" onclick="ouvrirModalSuppression('${question.id}')">🛑 Demander retrait</button>`;
-                            }
+                            if (question.auteur_id && membreConnecte.id === question.auteur_id) actionsHtml = `<button class="btn-delete" style="float: right;" onclick="ouvrirModalSuppressionAuteur('${question.id}')">🗑️ Retirer mon sondage</button>`;
+                            else if (membreConnecte.role === 'Bureau') actionsHtml = `<button class="btn-edit" style="float: right; background-color:#e67e22;" onclick="ouvrirModalSuppression('${question.id}')">🛑 Demander retrait</button>`;
                         }
+                        if (membreConnecte && membreConnecte.role === 'Bureau') btnCloreHtml = `<button class="btn-delete" style="float: right; margin-right: 5px;" onclick="cloreQuestion('${question.id}')">🔒 Clore</button>`;
 
-                        if (membreConnecte && membreConnecte.role === 'Bureau') {
-                            btnCloreHtml = `<button class="btn-delete" style="float: right; margin-right: 5px;" onclick="cloreQuestion('${question.id}')">🔒 Clore</button>`;
+                        // --- CONSTRUCTION DYNAMIQUE DU CHAMP DE VOTE ---
+                        let inputVoteHtml = '';
+                        if (typeSondage === 'texte_libre') {
+                            inputVoteHtml = `<input type="text" id="reponse-input-${question.id}" value="${monChoix}" placeholder="Votre réponse courte..." style="flex:1; padding:8px; border-radius:4px; border:1px solid #ccc;">`;
+                        } else {
+                            let listeChoix = [];
+                            if (typeSondage === 'classique') listeChoix = ['Pour', 'Contre', 'Abstention'];
+                            else if (typeSondage === 'oui_non_peutetre') listeChoix = ['Oui', 'Non', 'Peut-être'];
+                            else if (typeSondage === 'oui_non') listeChoix = ['Oui', 'Non'];
+                            else if (typeSondage === 'choix_multiples' || typeSondage === 'choix_ouverts') {
+                                // Combine options de base + celles rajoutées par les membres
+                                const toutesLesReponses = reponsesQuestion.map(r => r.choix);
+                                const setChoix = new Set([...optionsSondage, ...toutesLesReponses]);
+                                listeChoix = Array.from(setChoix);
+                            }
+                            
+                            let optionsHtml = listeChoix.map(opt => `<option value="${opt}" ${monChoix === opt ? 'selected' : ''}>${opt}</option>`).join('');
+                            let inputAutreHtml = '';
+                            
+                            if (typeSondage === 'choix_ouverts') {
+                                optionsHtml += `<option value="AUTRE">➕ Autre (préciser...)</option>`;
+                                inputAutreHtml = `<input type="text" id="reponse-autre-${question.id}" placeholder="Précisez..." style="display:none; flex:1; margin-left:10px; padding:8px; border-radius:4px; border:1px solid #ccc;">`;
+                            }
+                            
+                            inputVoteHtml = `
+                                <select id="reponse-select-${question.id}" onchange="gererChoixOuvert('${question.id}')" style="flex:1;">
+                                    <option value="" ${monChoix === '' ? 'selected' : ''} disabled>-- Votre choix --</option>
+                                    ${optionsHtml}
+                                </select>
+                                ${inputAutreHtml}
+                            `;
                         }
 
                         voteSectionHtml = `
-                            <div class="vote-section">
-                                <select id="reponse-select-${question.id}">
-                                    <option value="" ${monChoix === '' ? 'selected' : ''} disabled>-- Votre réponse --</option>
-                                    <option value="Pour" ${monChoix === 'Pour' ? 'selected' : ''}>👍 Pour</option>
-                                    <option value="Contre" ${monChoix === 'Contre' ? 'selected' : ''}>👎 Contre</option>
-                                    <option value="Abstention" ${monChoix === 'Abstention' ? 'selected' : ''}>🤷 Abstention</option>
-                                </select>
-                                <button onclick="soumettreVote('${question.id}', 'question')" style="background-color: #8e44ad;">${monChoix === '' ? 'Voter' : 'Modifier mon vote'}</button>
+                            <div class="vote-section" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                                ${inputVoteHtml}
+                                <button onclick="soumettreVote('${question.id}', 'question')" style="background-color: #8e44ad; padding:8px 15px;">${monChoix === '' ? 'Voter' : 'Modifier'}</button>
                             </div>
                         `;
                     }
@@ -1179,13 +1244,11 @@
                         <div class="question-card">
                             ${actionsHtml}${btnCloreHtml}
                             <h2 style="margin-bottom: 5px;">${question.titre} ${cibleBadge}</h2>
-                            ${auteurSpan}
+                            <span style="font-size: 14px; color: #7f8c8d; display:block;">Par ${auteurNom}</span>
                             ${alerteSuppressionHtml}
                             <p style="margin-top: 15px;">${question.description ? question.description.replace(/\n/g, '<br>') : ''}</p>
                             <div class="stats-bar" onclick="afficherDetailsVotes('${question.id}', 'question')">
-                                <span class="stat-badge stat-present" id="stat-pour-${question.id}">👍 Pour: ${nbPour}</span>
-                                <span class="stat-badge stat-absent" id="stat-contre-${question.id}">👎 Contre: ${nbContre}</span>
-                                <span class="stat-badge stat-attente" id="stat-abstention-${question.id}">🤷 Abstention: ${nbAbstention}</span>
+                                ${statsHtml}
                             </div>
                             ${voteSectionHtml}
                         </div>
@@ -1210,10 +1273,29 @@
             let table = type === 'soiree' ? 'votes' : 'reponses';
             let colonneCible = type === 'soiree' ? 'soiree_id' : 'question_id';
             let colonneValeur = type === 'soiree' ? 'statut' : 'choix';
-            let selectId = type === 'soiree' ? `statut-select-${idCible}` : `reponse-select-${idCible}`;
             
-            const valeur = document.getElementById(selectId).value;
-            if (!valeur) return alert("Veuillez faire un choix avant de valider.");
+            let valeur = '';
+            
+            if (type === 'soiree') {
+                const selectEl = document.getElementById(`statut-select-${idCible}`);
+                if(selectEl) valeur = selectEl.value;
+            } else {
+                // Lecture dynamique du sondage
+                const inputTxt = document.getElementById(`reponse-input-${idCible}`);
+                const selectEl = document.getElementById(`reponse-select-${idCible}`);
+                const inputAutre = document.getElementById(`reponse-autre-${idCible}`);
+                
+                if (inputTxt) {
+                    valeur = inputTxt.value.trim(); // Texte libre
+                } else if (selectEl) {
+                    valeur = selectEl.value;
+                    if (valeur === 'AUTRE' && inputAutre) {
+                        valeur = inputAutre.value.trim(); // Choix ouvert personnalisé
+                    }
+                }
+            }
+            
+            if (!valeur) return alert("Veuillez faire un choix ou saisir une réponse avant de valider.");
 
             const dataObj = { membre_id: membreConnecte.id };
             dataObj[colonneCible] = idCible; dataObj[colonneValeur] = valeur;
@@ -1223,26 +1305,20 @@
             if (error) {
                 alert("Erreur lors de l'enregistrement.");
             } else { 
-                // --- NOUVEAU : TRACAGE DANS LE REGISTRE ---
                 try {
                     let titre = "Élément inconnu";
-                    
                     if (type === 'soiree') {
-                        // On récupère le titre de la soirée officielle
                         const { data: soiree } = await supabaseClient.from('soirees').select('titre').eq('id', idCible).single();
                         if (soiree) titre = soiree.titre;
                         await tracerAction('VOTE_SOIREE', `A voté "${valeur}" pour la soirée officielle : ${titre}`);
-                        
                     } else if (type === 'question') {
-                        // On récupère le titre du sondage
                         const { data: question } = await supabaseClient.from('questions').select('titre').eq('id', idCible).single();
                         if (question) titre = question.titre;
-                        await tracerAction('VOTE_SONDAGE', `A répondu "${valeur}" au sondage : ${titre}`);
+                        // On coupe le texte s'il est trop long pour le registre
+                        let logValeur = valeur.length > 30 ? valeur.substring(0,30) + '...' : valeur;
+                        await tracerAction('VOTE_SONDAGE', `A répondu "${logValeur}" au sondage : ${titre}`);
                     }
-                } catch (err) {
-                    console.error("Erreur lors de la récupération du titre pour les logs :", err);
-                }
-                // ----------------------------------------
+                } catch (err) { console.error(err); }
 
                 alert("Choix enregistré !"); 
                 if(type === 'soiree') await chargerSoirees(); 
@@ -1289,20 +1365,34 @@
                 container.innerHTML = `<div class="details-list stat-present"><h4>✅ Oui</h4> ${htmlOui === '<ul>' ? '<p>Aucun</p>' : htmlOui + '</ul>'}</div><div class="details-list stat-attente"><h4>⏳ À confirmer</h4> ${htmlAttente === '<ul>' ? '<p>Aucun</p>' : htmlAttente + '</ul>'}</div><div class="details-list stat-absent"><h4>❌ Non</h4> ${htmlNon === '<ul>' ? '<p>Aucun</p>' : htmlNon + '</ul>'}</div>`;
             
             } else {
-                // Traitement pour les Sondages (Questions)
+                // --- TRAITEMENT DYNAMIQUE DES SONDAGES (QUESTIONS) ---
                 document.getElementById('titre-details-modal').innerText = "Récapitulatif des réponses";
                 const { data: reponses } = await supabaseClient.from('reponses').select('*').eq('question_id', id);
-                let htmlPour = '<ul>', htmlContre = '<ul>', htmlAbs = '<ul>';
-                if(reponses) {
+                
+                let groupes = {};
+                if (reponses) {
                     reponses.forEach(r => {
                         const m = membresList.find(m => m.id === r.membre_id);
                         if (m) {
-                            let li = `<li>${m.prenom} ${m.nom}</li>`;
-                            if (r.choix === 'Pour') htmlPour += li; else if (r.choix === 'Contre') htmlContre += li; else if (r.choix === 'Abstention') htmlAbs += li;
+                            if (!groupes[r.choix]) groupes[r.choix] = [];
+                            groupes[r.choix].push(`${m.prenom} ${m.nom}`);
                         }
                     });
                 }
-                container.innerHTML = `<div class="details-list stat-present"><h4>👍 Pour</h4> ${htmlPour === '<ul>' ? '<p>Aucun</p>' : htmlPour + '</ul>'}</div><div class="details-list stat-absent"><h4>👎 Contre</h4> ${htmlContre === '<ul>' ? '<p>Aucun</p>' : htmlContre + '</ul>'}</div><div class="details-list stat-attente"><h4>🤷 Abstention</h4> ${htmlAbs === '<ul>' ? '<p>Aucun</p>' : htmlAbs + '</ul>'}</div>`;
+                
+                let htmlContent = '';
+                Object.entries(groupes).forEach(([choix, noms]) => {
+                    let liste = noms.map(n => `<li>${n}</li>`).join('');
+                    htmlContent += `
+                        <div class="details-list">
+                            <h4 style="color: #8e44ad; margin-bottom:5px;">🔹 ${choix} (${noms.length})</h4>
+                            <ul style="padding-left:20px; margin-top:0;">${liste}</ul>
+                        </div>
+                    `;
+                });
+                
+                if (Object.keys(groupes).length === 0) htmlContent = '<p>Aucune réponse pour le moment.</p>';
+                container.innerHTML = htmlContent;
             }
         }
         function fermerDetailsVotes() { modaleDetailsOuverteId = null; modaleDetailsType = null; document.getElementById('details-votes-modal').style.display = 'none'; }
@@ -2120,6 +2210,24 @@
             document.getElementById('modal-add-soiree-off').style.display = 'none';
             alert("Soirée Off programmée !");
             await chargerSoireesOff();
+        }
+
+        function gererFormulaireSondage() {
+            const type = document.getElementById('new-question-type').value;
+            const zoneOptions = document.getElementById('zone-options-sondage');
+            if (type === 'choix_multiples' || type === 'choix_ouverts') {
+                zoneOptions.style.display = 'block';
+            } else {
+                zoneOptions.style.display = 'none';
+            }
+        }
+
+        function gererChoixOuvert(id) {
+            const selectEl = document.getElementById(`reponse-select-${id}`);
+            const autreEl = document.getElementById(`reponse-autre-${id}`);
+            if (selectEl && autreEl) {
+                autreEl.style.display = selectEl.value === 'AUTRE' ? 'inline-block' : 'none';
+            }
         }
 
         // --- DÉMARRAGE DE L'APP ---
